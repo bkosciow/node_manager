@@ -75,3 +75,19 @@ class Microplate:
             print(f"Error saving/updating hashes to database: {e}")
         finally:
             db.close()
+
+    def get_diff_hashes(self, hashes, repository):
+        diff = []
+        if not hashes:
+            return diff
+        db = next(db_helper.get_db())
+        _list = db.query(MicroplateHash).filter(MicroplateHash.repository == repository).order_by(
+            MicroplateHash.name).all()
+
+        db_hashes = {item.name: item.hash for item in _list}
+
+        for filename, db_hash in db_hashes.items():
+            if filename not in hashes or hashes[filename] != db_hash:
+                diff.append(filename)
+
+        return diff

@@ -1,3 +1,5 @@
+import os.path
+
 from sqlalchemy import Column, Integer, String, DateTime, func
 from flask import Flask, request, jsonify
 from node_manager.model.node import NodeModel
@@ -77,6 +79,17 @@ def init_api(app, cfg, microplate):
             print(f"Error pinging node {node_id}: {e}")
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/node/<int:node_id>/microplate/repository", methods=['POST'])
+    @require_token
+    def node_assign_microplate_repository(node_id):
+        db = next(db_helper.get_db())
+        node = db.query(NodeModel).get(node_id)
+        if node is None:
+            return '', 404
+        node.microplate_repository = request.json.get('name')
+        db.commit()
+        return '', 204
+
     @app.route("/api/nodes/userspace/hash")
     @require_token
     def hash_userspace():
@@ -108,6 +121,10 @@ def init_api(app, cfg, microplate):
             nodes_list = db.query(NodeModel).all()
             nodes_data = []
             for node in nodes_list:
+                diff = microplate.get_diff_hashes(
+                    node.node_micropython_hash,
+                    node.microplate_repository
+                )
                 node_data = {
                     "id": node.id,
                     "node_name": node.node_name,
@@ -117,6 +134,8 @@ def init_api(app, cfg, microplate):
                     "node_userspace_hash": node.node_userspace_hash,
                     "updated_at": str(node.updated_at),
                     "created_at": str(node.created_at),
+                    "microplate_diff": diff,
+                    "microplate_repository": node.microplate_repository
                 }
                 nodes_data.append(node_data)
             return jsonify(nodes_data)
@@ -134,8 +153,7 @@ def init_api(app, cfg, microplate):
     @app.route("/api/microplate/<repository>/hash", methods=['POST'])
     @require_token
     def microplate_hash(repository):
-        print(repository)
-        hashes = microplate.scan_directory(repository)
+        hashes = microplate.scan_directory(os.path.join(repository, '_microplate'))
         microplate.save_hashes(hashes, repository)
 
         return jsonify(None)
