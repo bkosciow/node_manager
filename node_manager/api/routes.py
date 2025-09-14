@@ -1,7 +1,8 @@
 import os.path
-
 from sqlalchemy import Column, Integer, String, DateTime, func
 from flask import Flask, request, jsonify
+from flasgger import Swagger
+#, API)
 from node_manager.model.node import NodeModel
 from node_manager.model.microplate import MicroplateHash
 from sqlalchemy.ext.declarative import declarative_base
@@ -25,6 +26,7 @@ def require_token(f):
 
 
 def init_api(app, cfg, microplate):
+    swagger = Swagger(app)
     import node_manager.service.db_helper as db_helper
     global API_TOKEN
     API_TOKEN = cfg.get("api_key")
@@ -35,6 +37,13 @@ def init_api(app, cfg, microplate):
     @app.route("/api/nodes/ping")
     @require_token
     def ping():
+        """
+        Executes a broadcast ping to all nodes.
+        ---
+        responses:
+            204:
+                description: No content
+        """
         msg = {'event': "system.ping"}
         send(msg)
 
@@ -43,6 +52,21 @@ def init_api(app, cfg, microplate):
     @app.route("/api/node/<int:node_id>/ping")
     @require_token
     def node_ping(node_id):
+        """
+        Executes a broadcast ping to a node.
+        ---
+        parameters:
+          - name: node_id
+            in: path
+            description: ID of the node to ping.
+            required: true
+            type: integer
+        responses:
+            204:
+                description: No content
+            404:
+                description: Node not found
+        """
         try:
             db = next(db_helper.get_db())
             node = db.query(NodeModel).get(node_id)
@@ -59,6 +83,13 @@ def init_api(app, cfg, microplate):
     @app.route("/api/nodes/microplate/hash")
     @require_token
     def hash_microplate():
+        """
+        Send broadcast with microplate hash recalculation to all nodes.
+        ---
+        responses:
+           204:
+                description: No content
+        """
         msg = {'event': "system.microplate.get_hash"}
         send(msg)
 
@@ -67,6 +98,22 @@ def init_api(app, cfg, microplate):
     @app.route("/api/node/<int:node_id>/microplate/hash")
     @require_token
     def node_hash_microplate(node_id):
+        """
+        Send broadcast with microplate hash recalculation to a specific node.
+        ---
+        parameters:
+            - name: node_id
+              in: path
+              required: true
+              type: integer
+              description: ID of the node to send the broadcast to.
+        responses:
+           204:
+                description: No content
+           404:
+                description: Node not found
+
+        """
         try:
             db = next(db_helper.get_db())
             node = db.query(NodeModel).get(node_id)
@@ -82,6 +129,36 @@ def init_api(app, cfg, microplate):
     @app.route("/api/node/<int:node_id>/microplate/repository", methods=['POST'])
     @require_token
     def node_assign_microplate_repository(node_id):
+        """
+        Assign a microplate repository to the node.
+        ---
+        parameters:
+            - name: node_id
+              in: path
+              required: true
+              type: integer
+              description: ID of the node to assign the microplate repository to.
+            - name: body
+              in: body
+              required: true
+              schema:
+                id: MicroplateRepository
+                required:
+                    - name
+                properties:
+                    name:
+                        type: string
+                        description: Name of the microplate repository to assign
+                        example: "aaa"
+        responses:
+            204:
+                description: Microplate repository assigned successfully.
+            500:
+                description: Internal server error.
+            404:
+                description: Node not found.
+
+        """
         db = next(db_helper.get_db())
         node = db.query(NodeModel).get(node_id)
         if node is None:
@@ -93,6 +170,12 @@ def init_api(app, cfg, microplate):
     @app.route("/api/nodes/userspace/hash")
     @require_token
     def hash_userspace():
+        """Broadcast the message for user space to all nodes in the network.
+        ----
+        response:
+            204:
+                description: Hash of the userspace broadcast successfully.
+        """
         msg = {'event': "system.userspace.get_hash"}
         send(msg)
 
@@ -101,6 +184,19 @@ def init_api(app, cfg, microplate):
     @app.route("/api/node/<int:node_id>/userspace/hash")
     @require_token
     def node_hash_userspace(node_id):
+        """Broadcast the message for user space hash to the specified node.
+        ----
+        parameters:
+           - name: node_id
+             in: path
+             type: integer
+             required: true
+        response:
+            204:
+                description: Hash of the userspace broadcast successfully.
+            404:
+                description: Node not found.
+        """
         try:
             db = next(db_helper.get_db())
             node = db.query(NodeModel).get(node_id)
@@ -116,6 +212,50 @@ def init_api(app, cfg, microplate):
     @app.route("/api/nodes")
     @require_token
     def nodes():
+        """
+        Get all nodes in the database.
+        ---
+        responses:
+            200:
+                description: List of nodes.
+                schema:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: integer
+                                description: Node ID
+                            node_name:
+                                type: string
+                                description: Name of the node
+                            node_id:
+                                type: string
+                                description: Unique node identifier
+                            node_system:
+                                type: object
+                                description: Node system information
+                            node_micropython_hash:
+                                type: object
+                                description: MicroPython hash
+                            node_userspace_hash:
+                                type: object
+                                description: User space hash
+                            updated_at:
+                                type: string
+                                format: date-time
+                                description: Last updated timestamp
+                            created_at:
+                                type: string
+                                format: date-time
+                                description: Creation timestamp
+                            microplate_diff:
+                                type: object
+                                description: Difference hashes
+                            microplate_repository:
+                                type: string
+                                description: Microplate repository name
+        """
         try:
             db = next(db_helper.get_db())
             nodes_list = db.query(NodeModel).all()
@@ -146,6 +286,16 @@ def init_api(app, cfg, microplate):
     @app.route("/api/microplates", methods=['GET'])
     @require_token
     def microplate_repos():
+        """Fetch all microplate repositories
+        ---
+        responses:
+            200:
+                description: List of microplate repositories
+                schema:
+                    type: array
+                    items:
+                        type: string
+        """
         repos = microplate.get_repositories()
 
         return jsonify(repos)
@@ -153,6 +303,17 @@ def init_api(app, cfg, microplate):
     @app.route("/api/microplate/<repository>/hash", methods=['POST'])
     @require_token
     def microplate_hash(repository):
+        """
+        Scans given repository for microplate hashes and saves them to the database.
+        ---
+        parameters:
+           - name: repository
+             in: path
+             type: string
+        responses:
+           200:
+              description: Successfully saved hashes
+        """
         hashes = microplate.scan_directory(os.path.join(repository, '_microplate'))
         microplate.save_hashes(hashes, repository)
 
@@ -161,6 +322,37 @@ def init_api(app, cfg, microplate):
     @app.route("/api/microplate/<repository>/hash", methods=['GET'])
     @require_token
     def microplate_hash_list(repository):
+        """
+        Get all microplate files and their hashes for a given repository.
+        ---
+        parameters:
+           - name: repository
+             in: path
+             type: string
+        responses:
+           200:
+                description: List of microplate files and their hashes
+                schema:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: integer
+                                description: id of the microplate file
+                            name:
+                                type: string
+                                description: Name of the file
+                            hash:
+                                type: string
+                                description: hash of the file
+                            updated_at:
+                                type: string
+                                description: date and time when the file was last modified
+                            created_at:
+                                type: string
+                                description: date and time when the file was created
+        """
         try:
             db = next(db_helper.get_db())
             _list = db.query(MicroplateHash).filter(MicroplateHash.repository==repository).order_by(MicroplateHash.name).all()
