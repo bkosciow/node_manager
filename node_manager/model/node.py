@@ -15,5 +15,6 @@ class NodeModel(Base):
     node_micropython_hash = Column(JSON)  # JSON type
     node_userspace_hash = Column(JSON)  # JSON type
     microplate_repository = Column(String(512), nullable=False)
+    userspace_repository = Column(String(512), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     created_at = Column(DateTime, default=func.now())

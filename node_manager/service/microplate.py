@@ -4,6 +4,7 @@ import logging
 from node_manager.service.hasher import file_hash
 import node_manager.service.db_helper as db_helper
 from node_manager.model.microplate import MicroplateHash
+from node_manager.model.userspace import UserspaceHash
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,17 @@ class Microplate:
         if not os.path.exists(self.path):
             logger.error("""Path %d does not exists"""% (self.path))
 
-    def get_repositories(self):
+    def get_microplate_repositories(self):
+        return self._get_dir_list('_microplate')
+
+    def get_userspace_repositories(self):
+        return self._get_dir_list('_userspace')
+
+    def _get_dir_list(self, subdir):
         data = []
         try:
             for filename in os.listdir(self.path):
-                dirpath = os.path.join(self.path, filename)
+                dirpath = os.path.join(self.path, filename, subdir)
                 if os.path.isdir(dirpath):
                     data.append(filename)
 
@@ -50,7 +57,7 @@ class Microplate:
 
         return hashes
 
-    def save_hashes(self, hashes, repository):
+    def save_microplate_hashes(self, hashes, repository):
         db = next(db_helper.get_db())
         try:
             for filename, hash_value in hashes.items():
@@ -61,6 +68,32 @@ class Microplate:
                     existing_hash.updatedAt = datetime.now()
                 else:
                     new_hash = MicroplateHash(
+                        name=filename,
+                        hash=hash_value,
+                        repository=repository,
+                        createdAt=datetime.now(),
+                        updatedAt=datetime.now()
+                    )
+                    db.add(new_hash)
+
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Error saving/updating hashes to database: {e}")
+        finally:
+            db.close()
+
+    def save_userspace_hashes(self, hashes, repository):
+        db = next(db_helper.get_db())
+        try:
+            for filename, hash_value in hashes.items():
+                existing_hash = db.query(UserspaceHash).filter(UserspaceHash.repository==repository).filter(UserspaceHash.name == filename).first()
+
+                if existing_hash:
+                    existing_hash.hash = hash_value
+                    existing_hash.updatedAt = datetime.now()
+                else:
+                    new_hash = UserspaceHash(
                         name=filename,
                         hash=hash_value,
                         repository=repository,

@@ -3,7 +3,9 @@ from sqlalchemy import inspect
 from sqlalchemy import create_engine
 from node_manager.model.node import NodeModel
 from node_manager.model.microplate import MicroplateHash
+from node_manager.model.userspace import UserspaceHash
 import logging
+from sqlalchemy.ext.declarative import declarative_base
 
 logger = logging.getLogger(__name__)
 cfg = None
@@ -15,7 +17,7 @@ def get_db():
         yield None
     else:
         engine = create_engine(cfg['db'], echo=False)
-        Base.metadata.create_all(bind=engine)
+        #Base.metadata.create_all(bind=engine)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
@@ -28,7 +30,7 @@ def check_and_create_tables():
     db = next(get_db())
     inspector = inspect(db.bind)
 
-    tables_to_create = [NodeModel.__table__, MicroplateHash.__table__]
+    tables_to_create = [NodeModel.__table__, MicroplateHash.__table__, UserspaceHash.__table__]
 
     for table in tables_to_create:
         if not inspector.has_table(table.name):
