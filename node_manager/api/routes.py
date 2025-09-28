@@ -138,10 +138,6 @@ def init_api(app, cfg, microplate):
             nodes_list = db.query(NodeModel).all()
             nodes_data = []
             for node in nodes_list:
-                diff = microplate.get_diff_hashes(
-                    node.node_micropython_hash,
-                    node.microplate_repository
-                )
                 node_data = {
                     "id": node.id,
                     "node_name": node.node_name,
@@ -151,10 +147,16 @@ def init_api(app, cfg, microplate):
                     "node_userspace_hash": node.node_userspace_hash,
                     "updated_at": str(node.updated_at),
                     "created_at": str(node.created_at),
-                    "microplate_diff": diff,
+                    "microplate_diff": microplate.get_microplate_diff_hashes(
+                        node.node_micropython_hash,
+                        node.microplate_repository
+                    ),
                     "microplate_repository": node.microplate_repository,
                     "userspace_repository": node.userspace_repository,
-                    "userspace_diff": [],
+                    "userspace_diff": microplate.get_userspace_diff_hashes(
+                        node.node_userspace_hash,
+                        node.userspace_repository
+                    ),
                 }
                 nodes_data.append(node_data)
             return jsonify(nodes_data)

@@ -109,18 +109,26 @@ class Microplate:
         finally:
             db.close()
 
-    def get_diff_hashes(self, hashes, repository):
-        diff = []
+    def get_microplate_diff_hashes(self, hashes, repository):
         if not hashes:
-            return diff
+            return []
         db = next(db_helper.get_db())
         _list = db.query(MicroplateHash).filter(MicroplateHash.repository == repository).order_by(
             MicroplateHash.name).all()
+        return self._return_hash_diff(_list, hashes)
 
+    def get_userspace_diff_hashes(self, hashes, repository):
+        if not hashes:
+            return []
+        db = next(db_helper.get_db())
+        _list = db.query(UserspaceHash).filter(UserspaceHash.repository == repository).order_by(
+            UserspaceHash.name).all()
+        return self._return_hash_diff(_list, hashes)
+
+    def _return_hash_diff(self, _list, hashes):
         db_hashes = {item.name: item.hash for item in _list}
-
+        diff = []
         for filename, db_hash in db_hashes.items():
             if filename not in hashes or hashes[filename] != db_hash:
                 diff.append(filename)
-
         return diff
