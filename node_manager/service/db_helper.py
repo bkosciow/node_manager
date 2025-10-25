@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from node_manager.model.node import NodeModel
 from node_manager.model.microplate import MicroplateHash
 from node_manager.model.userspace import UserspaceHash
+from node_manager.model.node import NodeUpgrade
 import logging
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -30,7 +31,9 @@ def check_and_create_tables():
     db = next(get_db())
     inspector = inspect(db.bind)
 
-    tables_to_create = [NodeModel.__table__, MicroplateHash.__table__, UserspaceHash.__table__]
+    tables_to_create = [
+        NodeModel.__table__, MicroplateHash.__table__, UserspaceHash.__table__, NodeUpgrade.__table__
+    ]
 
     for table in tables_to_create:
         if not inspector.has_table(table.name):

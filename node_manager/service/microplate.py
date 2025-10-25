@@ -41,6 +41,9 @@ class Microplate:
 
         return sorted(data)
 
+    def get_repository_path(self, repository_name):
+        return os.path.join(self.path, repository_name)
+
     def scan_directory(self, repository):
         hashes = {}
         base_path = os.path.join(self.path, repository)

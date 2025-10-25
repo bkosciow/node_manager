@@ -31,9 +31,9 @@ def serve(config_file):
     microplate = Microplate(config['microplate'])
 
     # starts a listener thread
-    # serverSensor = Server()
-    # serverSensor.add_handler('message_handler', MessageHandler())
-    # serverSensor.start()
+    serverSensor = Server()
+    serverSensor.add_handler('message_handler', MessageHandler())
+    serverSensor.start()
 
     logger.info("Starting API server")
     app = Flask(__name__)

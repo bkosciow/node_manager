@@ -1,14 +1,16 @@
 import os.path
 from sqlalchemy import Column, Integer, String, DateTime, func
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flasgger import Swagger
 from node_manager.model.node import NodeModel
 from node_manager.model.microplate import MicroplateHash
 from node_manager.model.userspace import UserspaceHash
+from node_manager.model.node import NodeUpgrade
 from sqlalchemy.ext.declarative import declarative_base
 from functools import wraps
 from node_manager.service.comm import send
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -72,7 +74,7 @@ def init_api(app, cfg, microplate):
             node = db.query(NodeModel).get(node_id)
             if node is None:
                 return '', 404
-            msg = {'event': "system.ping", "target": [node.node_name]}
+            msg = {'event': "system.ping", "targets": [node.node_name]}
             send(msg)
             return '', 204
 
@@ -206,7 +208,7 @@ def init_api(app, cfg, microplate):
             node = db.query(NodeModel).get(node_id)
             if node is None:
                 return '', 404
-            msg = {'event': "system.microplate.get_hash", "target": [node.node_name]}
+            msg = {'event': "system.microplate.get_hash", "targets": [node.node_name]}
             send(msg)
             return '', 204
         except Exception as e:
@@ -421,7 +423,7 @@ def init_api(app, cfg, microplate):
             node = db.query(NodeModel).get(node_id)
             if node is None:
                 return '', 404
-            msg = {'event': "system.userspace.get_hash", "target": [node.node_name]}
+            msg = {'event': "system.userspace.get_hash", "targets": [node.node_name]}
             send(msg)
             return '', 204
         except Exception as e:
@@ -515,3 +517,98 @@ def init_api(app, cfg, microplate):
         except Exception as e:
             logger.error(f"Error fetching nodes: {e}")
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/node/<int:node_id>/userspace/upgrade", methods=["POST"])
+    @require_token
+    def send_upgrade_userspace_message(node_id):
+        """
+        Send a message with upgrade request to the specified node.
+        ---
+        parameters:
+            - name: node_id
+            in: path
+            type: integer
+              required: true
+               description: The ID of the node to upgrade
+        responses:
+            200:
+                description: Message sent successfully
+            404:
+                description: Node not found
+        """
+        try:
+            db = next(db_helper.get_db())
+            node = db.query(NodeModel).get(node_id)
+            if not node:
+                return jsonify({"error": "Node not found"}), 404
+
+            token = uuid.uuid4()
+            upgrade_node = NodeUpgrade(
+                token=token,
+                type="userspace",
+                node_id=node.id,
+            )
+            db.add(upgrade_node)
+            db.commit()
+
+            diff = microplate.get_userspace_diff_hashes(
+                node.node_userspace_hash,
+                node.userspace_repository
+            )
+            msg = {'event': "system.userspace.upgrade",
+                   "targets": [node.node_name],
+                   "parameters": {
+                       'type': 'userfiles',
+                       "files": diff,
+                       "base_url": f"{cfg['base_url']}:{cfg['port']}/api/upgrade/{token}"
+                   }
+               }
+            print(msg)
+            send(msg)
+
+            return '', 204
+        except Exception as e:
+            logger.error(f"Error fetching nodes: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    ##########################
+    # UPDATE NODES ROUTES
+    ##########################
+    @app.route("/api/upgrade/<uuid>/get/<filename>", methods=["GET"])
+    def send_userspace_file(uuid, filename):
+        db = next(db_helper.get_db())
+        upgrade = db.query(NodeUpgrade).filter(NodeUpgrade.token==uuid).first()
+        if not upgrade:
+            return jsonify({"error": "Upgrade not found"}), 404
+
+        node = db.query(NodeModel).filter(NodeModel.id==upgrade.node_id).first()
+        if not node:
+            return jsonify({"error": "Node not found"}), 404
+
+        if upgrade.type == "userspace":
+            filepath = os.path.join(microplate.get_repository_path(node.userspace_repository), '_userspace', filename)
+            return send_file(filepath, as_attachment=True)
+        elif upgrade.type == "microplate":
+            filepath = os.path.join(microplate.get_repository_path(node.microplate_repository), '_microplate', filename)
+            return send_file(filepath, as_attachment=True)
+
+        return jsonify({"error": "Invalid upgrade type"}), 400
+
+    @app.route("/api/upgrade/<uuid>/validate/<filename>", methods=["POST"])
+    def validate_userspace_file(uuid, filename):
+        db = next(db_helper.get_db())
+        upgrade = db.query(NodeUpgrade).filter(NodeUpgrade.token==uuid).first()
+        if not upgrade:
+            return jsonify({"error": "Upgrade not found"}), 404
+        node = db.query(NodeModel).filter(NodeModel.id==upgrade.node_id).first()
+        if not node:
+            return jsonify({"error": "Node not found"}), 404
+        _hash = request.json.get('hash')
+        if upgrade.type == "userspace":
+            _file = db.query(UserspaceHash).filter(UserspaceHash.repository==node.userspace_repository).filter(UserspaceHash.name==filename).first()
+            if not node:
+                return jsonify({"error": "Hash not found"}), 404
+            if _file.hash == _hash:
+                return jsonify(None), 200
+
+        return jsonify({"error": "Hash mismatch"}), 400
