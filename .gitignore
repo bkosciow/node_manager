@@ -19,3 +19,8 @@ __pycache__/
 config.ini
 upgrades/*
 !upgrades/_microplate/.gitkeep
+.env
+log/cron/*
+!log/cron/.gitkeep
+log/supervisord/*
+!log/supervisord/.gitkeep

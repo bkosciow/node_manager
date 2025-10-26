@@ -6,3 +6,4 @@ SQLAlchemy==2.0.40
 Flask==3.1.0
 mariadb==1.1.13
 flasgger==0.9.7.1
+gunicorn==23.0.0

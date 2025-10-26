@@ -29,6 +29,8 @@ class MessageHandler(HandlerInterface):
                     node = NodeModel(
                         node_name=name,
                         node_id=_id,
+                        microplate_repository="",
+                        userspace_repository="",
                     )
                     db.add(node)
                     db.commit()

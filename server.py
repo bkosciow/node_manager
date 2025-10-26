@@ -8,16 +8,16 @@ import time
 import logging
 from node_manager.service.microplate import Microplate
 
+app = Flask(__name__)
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s %(message)s'
 )
-logging.getLogger('schedule').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def serve(config_file):
+def serve(config_file, flask=False):
     config = Config(config_file)
 
     # NextCloud talk integration
@@ -36,15 +36,19 @@ def serve(config_file):
     serverSensor.start()
 
     logger.info("Starting API server")
-    app = Flask(__name__)
+
     init_api(app, config['api'], microplate)
 
-    try:
-        app.run(debug=True, host="0.0.0.0", port=int(config.get('api.port')), use_reloader=True)
-    except KeyboardInterrupt:
-        pass
+    if flask:
+        try:
+            app.run(debug=True, host="0.0.0.0", port=int(config.get('api.port')), use_reloader=True)
+        except KeyboardInterrupt:
+            pass
 
+
+logger.info("Starting app")
 
 if __name__ == "__main__":
-    logger.info("Starting app")
-    serve('config.ini')
+    serve('config.ini', True)
+else:
+    serve('config.ini', False)

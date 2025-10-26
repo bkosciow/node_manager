@@ -1,5 +1,6 @@
 [general]
 node_name=node3
+node_id=node_manager_1
 ip=192.168.1.255
 port=5053
 
@@ -12,19 +13,12 @@ ivkey=2345678901abcdef
 datakey=0123456789abcdef
 passphrase=mypassphrase
 
-
-[homeassistant]
-enabled=1
-mqtt_server=192.168.1.40
-mqtt_port=1883
-mqtt_user=assistant
-mqtt_password=AAA
-
 [api]
 enabled=1
 port=9092
 db=mariadb+mariadbconnector://sensor_listener:pwd@db/sensor_listener
 api_key=mykey
+base_url=http://192.168.1.40
 
 [nextcloud]
 enabled=0

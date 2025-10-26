@@ -1,0 +1,2 @@
+
+*/1 * * * * cd /app && /usr/local/bin/python repo_scanner.py >> /cronlog/repo_scanner.log 2>&1

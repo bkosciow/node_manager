@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      dockerfile: docker/Dockerfile
+      context: .
+      args:
+        - PUID=${PUID}
+        - GUID=${GUID}
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./:/app
+      - ./log/cron:/cronlog
+      - ./log/supervisord:/supervisordlog
+    dns:
+      - ${DNS_SERVER}
