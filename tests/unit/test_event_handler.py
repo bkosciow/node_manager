@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from app.message_handler.device_discovery import (
     MessageHandler,
     SUPPORTED_EVENTS,

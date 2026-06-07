@@ -61,4 +61,5 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:9092/health || exit 1
 
 # Default: run REST API server.
+# Override with `python device_scaner.py` for the UDP scanner.
 CMD ["python", "-m", "uvicorn", "app.rest_server:app", "--host", "0.0.0.0", "--port", "9092"]
