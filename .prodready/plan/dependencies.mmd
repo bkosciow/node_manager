@@ -1,0 +1,45 @@
+flowchart TD
+    subgraph Sprint1["Sprint 1: Data Layer & Discovery Engine"]
+        T001["TASK-001: Device Model"]
+        T002["TASK-002: Pydantic Schemas"]
+        T003["TASK-003: Device CRUD"]
+        T004["TASK-004: Handler - Parse & Queue"]
+        T005["TASK-005: Worker - Cache & Upsert"]
+        T006["TASK-006: Wire into Scanner"]
+    end
+
+    subgraph Sprint2["Sprint 2: REST API"]
+        T007["TASK-007: Device List Endpoint"]
+        T008["TASK-008: Single Device Endpoint"]
+    end
+
+    subgraph Sprint3["Sprint 3: Tests"]
+        T009["TASK-009: Unit Tests - Handler & Cache"]
+        T010["TASK-010: Unit Tests - CRUD"]
+        T011["TASK-011: Integration Tests - API"]
+    end
+
+    T001 --> T002
+    T001 --> T003
+    T002 --> T003
+    T002 --> T007
+    T003 --> T005
+    T003 --> T007
+    T003 --> T010
+    T004 --> T005
+    T005 --> T006
+    T005 --> T009
+    T007 --> T008
+    T008 --> T011
+
+    style T001 fill:#10B981
+    style T002 fill:#10B981
+    style T003 fill:#10B981
+    style T004 fill:#10B981
+    style T005 fill:#10B981
+    style T006 fill:#10B981
+    style T007 fill:#3B82F6
+    style T008 fill:#3B82F6
+    style T009 fill:#F59E0B
+    style T010 fill:#F59E0B
+    style T011 fill:#F59E0B

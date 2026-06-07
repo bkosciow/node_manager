@@ -1,0 +1,176 @@
+openapi: "3.1.0"
+info:
+  title: IoT Device Discovery Service
+  version: "0.1.0"
+  description: |
+    Discovers and deduplicates IoT devices from UDP broadcast messages.
+    Exposes a REST API for the frontend to browse discovered devices.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: devices
+    description: Device discovery and management
+
+paths:
+  /api/devices:
+    get:
+      summary: List all discovered devices
+      description: Paginated list of all discovered IoT devices.
+      operationId: listDevices
+      tags:
+        - devices
+      parameters:
+        - name: skip
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of records to skip (pagination offset)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+          description: Maximum number of records to return
+        - name: token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: API authentication token (skipped when API_TOKEN is empty)
+      responses:
+        "200":
+          description: A paginated list of devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeviceResponse"
+        "422":
+          description: Validation error (e.g., limit exceeds maximum)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+
+  /api/devices/{device_id}:
+    get:
+      summary: Get a single device by ID
+      description: Fetch details for a specific discovered device.
+      operationId: getDevice
+      tags:
+        - devices
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device ID
+        - name: token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: API authentication token
+      responses:
+        "200":
+          description: Device details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceResponse"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+        "422":
+          description: Validation error
+
+components:
+  schemas:
+    DeviceResponse:
+      type: object
+      required:
+        - id
+        - chip_id
+        - node
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: Unique device identifier (auto-increment)
+          example: 1
+        chip_id:
+          type: string
+          description: Unique device identifier from the IoT message
+          example: "ABC123"
+        node:
+          type: string
+          description: Device name (not unique)
+          example: "sensor-1"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp of first discovery
+          example: "2026-06-07T12:00:00"
+
+    DeviceCreate:
+      type: object
+      required:
+        - chip_id
+        - node
+      properties:
+        chip_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Unique device identifier from the IoT message
+        node:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Device name
+
+    HTTPError:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error description
+
+    HTTPValidationError:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationErrorItem"
+
+    ValidationErrorItem:
+      type: object
+      properties:
+        loc:
+          type: array
+          items:
+            type: string
+        msg:
+          type: string
+        type:
+          type: string
