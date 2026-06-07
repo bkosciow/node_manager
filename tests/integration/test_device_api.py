@@ -66,6 +66,8 @@ class TestGetSingleDevice:
         data = resp.json()
         assert data["chip_id"] == SAMPLE_DEVICE_1["chip_id"]
         assert data["node"] == SAMPLE_DEVICE_1["node"]
+        assert "events" in data
+        assert data["events"] == {}
 
     def test_nonexistent_device_returns_404(self, client):
         resp = client.get("/api/devices/9999")

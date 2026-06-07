@@ -47,20 +47,24 @@ def list_devices(
     return get_devices(db, skip=skip, limit=limit)
 
 
-@app.get(
-    "/api/devices/{device_id}",
-    response_model=DeviceResponse,
-    tags=["devices"],
-)
+@app.get("/api/devices/{device_id}", tags=["devices"])
 def get_single_device(
     device_id: int = Path(ge=1),
     db: Session = Depends(get_db),
     token: str = Depends(verify_token),
-) -> Device:
+) -> dict:
+    """Get device details with logged events."""
     device = get_device(db, device_id)
     if device is None:
         raise HTTPException(status_code=404, detail="Device not found")
-    return device
+    events = get_events(db, device_id)
+    return {
+        "id": device.id,
+        "chip_id": device.chip_id,
+        "node": device.node,
+        "created_at": device.created_at.isoformat(),
+        "events": {e.event_type: e.parameters for e in events},
+    }
 
 
 # -- Event endpoints ---------------------------------------------------------
