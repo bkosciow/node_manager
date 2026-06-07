@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    ports:
+      - "9092:9092"
+    volumes:
+      - .:/app
+      - pip_cache:/root/.cache/pip
+    environment:
+      - DATABASE_URL=mysql+mysqlconnector://node_manager:postgres@db:3306/node_manager_dev
+      - APP_HOST=0.0.0.0
+      - APP_PORT=9092
+      - API_TOKEN=
+      - APPRISE_URL=
+      - APPRISE_TAG=
+      - PUID=1000
+      - GUID=1000
+      - NODE_NAME=node_manager
+      - NODE_ID=node_manager_1
+      - NODE_LISTENER_PORT=5053
+      - SL_STATISIV=
+      - SL_IVKEY=
+      - SL_DATAKEY=
+      - SL_PASSPHRASE=
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "pip install -e . 2>/dev/null; python -m uvicorn app.rest_server:app --host 0.0.0.0 --port 9092 --reload"
+    restart: unless-stopped
+
+  db:
+    image: mysql:8
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: node_manager_dev
+      MYSQL_USER: node_manager
+      MYSQL_PASSWORD: postgres
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "node_manager", "-ppostgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql_data:
+  pip_cache:
