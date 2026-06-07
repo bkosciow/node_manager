@@ -3,6 +3,10 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db.base import Base
 
+# Import models so Base.metadata.create_all() knows about all tables.
+# flake8: noqa: F401
+from app.models.device import Device
+
 engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

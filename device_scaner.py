@@ -44,12 +44,18 @@ def main() -> None:
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
+    handler = MessageHandler()
+    handler.start()
+
     _server = Server(port=settings.node_listener_port, ip_address="0.0.0.0")
-    _server.add_handler("message_handler", MessageHandler())
+    _server.add_handler("message_handler", handler)
     _server.start()
     logger.info("Listening on port %d", settings.node_listener_port)
 
     _stop.wait()
+
+    handler.stop()
+    logger.info("Discovery worker shut down")
 
 
 if __name__ == "__main__":
