@@ -5,9 +5,7 @@
     ],
     "deny": [
       "Bash(rm -rf *)",
-      "Bash(git push --force *)",
-      "Bash(curl * | bash)",
-      "Bash(wget * | sh)"
+      "Bash(git push --force *)"
     ]
   }
 }

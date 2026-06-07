@@ -26,3 +26,12 @@ Thumbs.db
 supervisord.log*
 docs/superpowers
 .claude/settings.local.json
+
+/.ai
+/agents
+/skills
+/.claude/*
+!/.claude/settings.json
+/t-shirt-size-install.sh
+AGENTS.md
+

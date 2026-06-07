@@ -8,7 +8,7 @@ from iot_message.message import Message
 from iot_message.cryptor.aes_sha1 import Cryptor as AESSHA1Cryptor
 
 from app.config import settings
-from app.message_handler.message_handler import MessageHandler
+from app.message_handler.device_discovery import MessageHandler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
