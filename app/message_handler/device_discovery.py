@@ -35,11 +35,14 @@ class MessageHandler(Handler):
             return
 
         data = message.data
-        chip_id = data.get("chip_id") if isinstance(data, dict) else None
+        raw_chip_id = data.get("chip_id") if isinstance(data, dict) else None
         node = data.get("node") if isinstance(data, dict) else None
 
+        # Normalize chip_id to string (some devices send int chip_ids).
+        chip_id = str(raw_chip_id).strip() if raw_chip_id is not None else ""
+
         # Treat empty strings as missing.
-        if not chip_id or not isinstance(chip_id, str) or not chip_id.strip():
+        if not chip_id:
             logger.warning("Skipping message — missing or empty chip_id: %s", data)
             return
         if not node or not isinstance(node, str) or not node.strip():
