@@ -30,7 +30,7 @@ class TestHandleValid:
         h = MessageHandler()
         h.handle(_msg({"chip_id": "ABC123", "node": "sensor-1"}))
         assert h.queue.qsize() == 1
-        assert h.queue.get_nowait() == ("ABC123", "sensor-1")
+        assert h.queue.get_nowait() == ("device", "ABC123", "sensor-1")
 
     def test_whitespace_only_chip_id_treated_as_missing(self):
         h = MessageHandler()

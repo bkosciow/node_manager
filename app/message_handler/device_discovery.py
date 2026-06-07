@@ -2,6 +2,7 @@
 
 Parses incoming IoT messages, extracts (chip_id, node) tuples,
 and persists them to the database via a background worker thread.
+Also detects special event types and queues them for storage.
 """
 
 import logging
@@ -16,12 +17,24 @@ if TYPE_CHECKING:  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+# Supported event types that trigger event data storage.
+SUPPORTED_EVENTS = frozenset({
+    "system.pong",
+    "system.microplate.hash",
+    "system.userspace.hash",
+})
+
+# Queue item types:
+#   ("device", chip_id, node)
+#   ("event", chip_id, node, event_type, parameters)
+QueueItem = tuple[str, str, str] | tuple[str, str, str, str, dict]
+
 
 class MessageHandler(Handler):
     """Parse incoming IoT messages and queue device discovery tuples."""
 
     def __init__(self) -> None:
-        self.queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.queue: queue.Queue[QueueItem] = queue.Queue()
         self.cache: set[tuple[str, str]] = set()
         self._stop_event = threading.Event()
         self._worker: threading.Thread | None = None
@@ -49,8 +62,20 @@ class MessageHandler(Handler):
             logger.warning("Skipping message — missing or empty node: %s", data)
             return
 
-        self.queue.put_nowait((chip_id, node))
+        # Always queue device discovery tuple.
+        self.queue.put_nowait(("device", chip_id, node))
         logger.info("Queued device discovery: (%s, %s)", chip_id, node)
+
+        # Check for supported event type.
+        event_type = data.get("event") if isinstance(data, dict) else None
+        if event_type in SUPPORTED_EVENTS:
+            parameters = data.get("parameters", {})
+            self.queue.put_nowait((
+                "event", chip_id, node, event_type, parameters
+            ))
+            logger.info(
+                "Queued event %s for (%s, %s)", event_type, chip_id, node
+            )
 
     def start(self) -> None:
         """Launch the background discovery worker thread."""
@@ -72,22 +97,31 @@ class MessageHandler(Handler):
     # -- internal -------------------------------------------------------------
 
     def _worker_loop(self) -> None:
-        """Drain the queue and persist devices to the database."""
+        """Drain the queue and persist devices/events to the database."""
         from app.db.session import SessionLocal
 
         while not self._stop_event.is_set():
             try:
-                chip_id, node = self.queue.get(timeout=0.5)
+                item = self.queue.get(timeout=0.5)
             except queue.Empty:
                 continue
 
-            self._process(chip_id, node, SessionLocal)
+            tag = item[0]
+            if tag == "device":
+                _, chip_id, node = item
+                self._process(chip_id, node, SessionLocal)
+            elif tag == "event":
+                _, chip_id, node, event_type, parameters = item
+                self._process_event(
+                    chip_id, node, event_type, parameters, SessionLocal
+                )
+            else:
+                logger.warning("Unknown queue item tag: %s", tag)
 
     def _process(
         self, chip_id: str, node: str, session_factory: "SessionLocal",
     ) -> None:
         """Deduplicate and persist a single (chip_id, node) pair."""
-        # Lazy imports — keeps this module importable without DB/CRUD.
         from app.crud.device import create_device, get_device_by_pair
         from app.schemas.device import DeviceCreate
         from sqlalchemy.exc import IntegrityError
@@ -119,5 +153,39 @@ class MessageHandler(Handler):
                 node,
             )
             self.cache.add(pair)
+        finally:
+            db.close()
+
+    def _process_event(
+        self,
+        chip_id: str,
+        node: str,
+        event_type: str,
+        parameters: dict,
+        session_factory: "SessionLocal",
+    ) -> None:
+        """Get or create device, then upsert event data."""
+        from app.crud.device_event import get_or_create_device, upsert_event
+        from sqlalchemy.exc import IntegrityError
+
+        db = session_factory()
+        try:
+            device = get_or_create_device(db, chip_id, node)
+            upsert_event(db, device.id, event_type, parameters)
+            logger.info(
+                "Upserted event %s for device %s", event_type, device.id
+            )
+        except IntegrityError:
+            db.rollback()
+            logger.warning(
+                "IntegrityError upserting event %s for (%s, %s)",
+                event_type, chip_id, node,
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Error processing event %s for (%s, %s)",
+                event_type, chip_id, node,
+            )
         finally:
             db.close()
