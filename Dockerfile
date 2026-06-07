@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ============================================
 # Stage 2: Builder (dev full install)
@@ -27,31 +27,38 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # ============================================
-# Stage 3: Runner (production draft)
+# Stage 3: Production Runner
 # ============================================
 FROM python:3.13-slim AS runner
 WORKDIR /app
 
+# Install MySQL client library (runtime only, no dev headers).
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends default-libmysqlclient-dev && \
+    apt-get install -y --no-install-recommends default-libmysqlclient-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd --gid 1000 appuser && \
-    useradd --uid 1000 --gid 1000 --create-home appuser
+# Create non-root user.
+ARG APP_UID=1000
+ARG APP_GID=1000
+RUN groupadd --gid ${APP_GID} appuser && \
+    useradd --uid ${APP_UID} --gid ${APP_GID} --create-home appuser
 
-COPY --from=deps /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=deps /usr/local/bin /usr/local/bin
-COPY --from=builder /app /app
+# Copy Python packages from deps stage.
+COPY --from=deps /install /usr/local
+
+# Copy application code.
+COPY --chown=appuser:appuser . .
 
 USER appuser
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 9092
 EXPOSE 5053/udp
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9092/api/devices')" || exit 1
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:9092/health || exit 1
 
+# Default: run REST API server.
 CMD ["python", "-m", "uvicorn", "app.rest_server:app", "--host", "0.0.0.0", "--port", "9092"]

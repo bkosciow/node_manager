@@ -1,4 +1,5 @@
-.PHONY: dev dev-build dev-down test test-unit test-integration lint clean help
+.PHONY: dev dev-build dev-down test test-unit test-integration lint clean help \
+        build-prod prod-up prod-down prod-logs prod-build
 
 # ===========================================
 # Development
@@ -47,11 +48,31 @@ db-shell: ## Connect to MySQL shell
 	docker compose exec db mysql -unode_manager -ppostgres node_manager_dev
 
 # ===========================================
+# Production
+# ===========================================
+
+prod-build: ## Build production Docker image
+	docker compose -f docker-compose.prod.yml build
+
+prod-up: ## Start production environment
+	docker compose -f docker-compose.prod.yml up -d
+
+prod-down: ## Stop production environment
+	docker compose -f docker-compose.prod.yml down
+
+prod-logs: ## View production logs
+	docker compose -f docker-compose.prod.yml logs -f
+
+prod-restart: ## Restart production services
+	docker compose -f docker-compose.prod.yml restart
+
+# ===========================================
 # Cleanup
 # ===========================================
 
 clean: ## Clean build artifacts and containers
 	docker compose down -v
+	docker compose -f docker-compose.prod.yml down -v 2>/dev/null || true
 	rm -rf __pycache__ .pytest_cache .coverage htmlcov *.egg-info
 
 # ===========================================

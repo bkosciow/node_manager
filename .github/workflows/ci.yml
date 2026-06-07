@@ -28,20 +28,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: rootpass
-          MYSQL_DATABASE: node_manager_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
     steps:
       - uses: actions/checkout@v4
 
@@ -63,3 +49,22 @@ jobs:
         run: pytest tests/integration/ -v
         env:
           DATABASE_URL: sqlite:///:memory:
+
+  build:
+    name: Build Docker
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: app:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
