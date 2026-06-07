@@ -1,11 +1,15 @@
 """Device model for IoT device discovery."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.device_event import DeviceEvent
 
 
 class Device(Base):
@@ -16,6 +20,10 @@ class Device(Base):
     node: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
+    )
+
+    events: Mapped[list["DeviceEvent"]] = relationship(
+        "DeviceEvent", back_populates="device", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
