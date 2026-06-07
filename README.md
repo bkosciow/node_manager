@@ -1,6 +1,6 @@
 # IoT Device Discovery Service
 
-Discovers and deduplicates IoT devices from UDP broadcast messages. Runs a background worker to parse incoming messages, deduplicate via an in-memory cache, and persist unique devices to MySQL. Exposes a FastAPI REST API for browsing discovered devices.
+Discovers and deduplicates IoT devices from UDP broadcast messages. Runs a background worker to parse incoming messages, deduplicate via an in-memory cache, and persist unique devices to MySQL. Also captures special event payloads (`system.pong`, `system.microplate.hash`, `system.userspace.hash`) and stores the latest parameters per device. Exposes a FastAPI REST API for browsing discovered devices and their event data.
 
 ## Quick Start
 
@@ -71,10 +71,10 @@ See `.env.example` for all options.
 ## Architecture
 
 - **UDP Listener** (`device_scaner.py`) — receives broadcast messages via `message_listener`
-- **Message Handler** (`app/message_handler/`) — parses messages, extracts `(chip_id, node)`, pushes to thread-safe queue
-- **Discovery Worker** — background daemon thread drains queue, deduplicates via in-memory cache, persists to MySQL
-- **REST API** (`app/rest_server.py`) — FastAPI server with paginated device listing
-- **Database** — MySQL with SQLAlchemy ORM, composite unique constraint on `(chip_id, node)`
+- **Message Handler** (`app/message_handler/`) — parses messages, extracts `(chip_id, node)`, detects special events, pushes tagged items to thread-safe queue
+- **Discovery Worker** — background daemon thread drains queue, deduplicates devices via in-memory cache, upserts event data, persists to MySQL
+- **REST API** (`app/rest_server.py`) — FastAPI server with paginated device listing and event data endpoints
+- **Database** — MySQL with SQLAlchemy ORM, composite unique constraints on `(chip_id, node)` and `(device_id, event_type)`
 
 ## API
 
@@ -82,6 +82,8 @@ See `.env.example` for all options.
 |--------|----------|-------------|
 | GET | `/api/devices` | List all devices (paginated) |
 | GET | `/api/devices/{id}` | Get single device by ID |
+| GET | `/api/devices/{id}/events` | Get all event data for a device |
+| GET | `/api/devices/{id}/events/{event_type}` | Get specific event data (pong, microplate.hash, userspace.hash) |
 | GET | `/health` | Health check |
 
 Full OpenAPI spec: [`.prodready/design/api/openapi.yaml`](.prodready/design/api/openapi.yaml)
@@ -97,9 +99,15 @@ app/
 ├── rest_server.py          # FastAPI app + routes
 ├── auth.py                 # Token authentication
 ├── config.py               # Pydantic settings
-├── models/device.py        # SQLAlchemy Device model
-├── schemas/device.py       # Pydantic schemas
-├── crud/device.py          # CRUD operations
+├── models/                 # SQLAlchemy models
+│   ├── device.py           # Device model
+│   └── device_event.py     # DeviceEvent model (event payloads)
+├── schemas/                # Pydantic schemas
+│   ├── device.py
+│   └── device_event.py
+├── crud/                   # CRUD operations
+│   ├── device.py
+│   └── device_event.py
 ├── db/                     # Database setup
 ├── message_handler/        # Message parsing + worker
 └── services/               # External service integrations
