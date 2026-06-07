@@ -5,7 +5,7 @@
 ---
 
 ### TASK-012: DeviceEvent SQLAlchemy Model
-**Priority**: P0 | **Estimate**: 1h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 1h | **Status**: Done
 
 **Description**:
 Create the `DeviceEvent` SQLAlchemy model with `device_id` (FK), `event_type` (String), `parameters` (JSON), `updated_at` (DateTime). Add composite unique constraint on `(device_id, event_type)`. Register in `app/models/__init__.py`.
@@ -25,7 +25,7 @@ Create the `DeviceEvent` SQLAlchemy model with `device_id` (FK), `event_type` (S
 ---
 
 ### TASK-013: DeviceEvent Pydantic Schemas
-**Priority**: P0 | **Estimate**: 0.5h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 0.5h | **Status**: Done
 
 **Description**:
 Create Pydantic schemas for DeviceEvent API responses: `EventParameters` (raw JSON dict), `DeviceEventResponse` (full record), `DeviceEventsResponse` (dict keyed by event_type).
@@ -42,7 +42,7 @@ Create Pydantic schemas for DeviceEvent API responses: `EventParameters` (raw JS
 ---
 
 ### TASK-014: DeviceEvent CRUD — Upsert, Get, GetOrCreateDevice
-**Priority**: P0 | **Estimate**: 2h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 2h | **Status**: Done
 
 **Description**:
 Implement CRUD functions: `upsert_event(db, device_id, event_type, parameters)` using `insert().on_duplicate_key_update()`, `get_event(db, device_id, event_type)`, `get_events(db, device_id)`, and `get_or_create_device(db, chip_id, node)` helper.
@@ -65,7 +65,7 @@ Implement CRUD functions: `upsert_event(db, device_id, event_type, parameters)` 
 ---
 
 ### TASK-015: Extend MessageHandler — Event Detection & Tagged Queue
-**Priority**: P0 | **Estimate**: 1.5h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 1.5h | **Status**: Done
 
 **Description**:
 Extend `MessageHandler.handle()` to detect supported event types (`system.pong`, `system.microplate.hash`, `system.userspace.hash`) in `message.data['event']`. Queue tagged items: `("device", chip_id, node)` for discovery and `("event", chip_id, node, event_type, parameters)` for events. A single message can produce both a device tuple and an event tuple.
@@ -86,7 +86,7 @@ Extend `MessageHandler.handle()` to detect supported event types (`system.pong`,
 ---
 
 ### TASK-016: Extend Worker — Dispatch & Event Upsert
-**Priority**: P0 | **Estimate**: 2h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 2h | **Status**: Done
 
 **Description**:
 Extend the worker loop to dispatch on tag. For `"device"` items, call existing `_process()`. For `"event"` items, call new `_process_event()` which: (1) gets or creates device, (2) upserts DeviceEvent, (3) handles errors gracefully.
@@ -111,7 +111,7 @@ Extend the worker loop to dispatch on tag. For `"device"` items, call existing `
 ---
 
 ### TASK-017: GET /api/devices/{device_id}/events/{event_type}
-**Priority**: P0 | **Estimate**: 1h | **Status**: Ready
+**Priority**: P0 | **Estimate**: 1h | **Status**: Done
 
 **Description**:
 Add endpoint to retrieve the latest parameters for a specific event type for a device. Returns 404 if device missing or event not found, 400 if event type is unsupported.
@@ -133,7 +133,7 @@ Add endpoint to retrieve the latest parameters for a specific event type for a d
 ---
 
 ### TASK-018: GET /api/devices/{device_id}/events
-**Priority**: P1 | **Estimate**: 0.5h | **Status**: Ready
+**Priority**: P1 | **Estimate**: 0.5h | **Status**: Done
 
 **Description**:
 Add endpoint to retrieve all stored event types for a device as a JSON object keyed by event_type.
@@ -156,7 +156,7 @@ Add endpoint to retrieve all stored event types for a device as a JSON object ke
 ---
 
 ### TASK-019: Unit Tests — Event Handler & CRUD
-**Priority**: P1 | **Estimate**: 2h | **Status**: Ready
+**Priority**: P1 | **Estimate**: 2h | **Status**: Done
 
 **Description**:
 Unit tests for event routing in MessageHandler, DeviceEvent CRUD (upsert, get, get_or_create_device).
@@ -186,7 +186,7 @@ Unit tests for event routing in MessageHandler, DeviceEvent CRUD (upsert, get, g
 ---
 
 ### TASK-020: Integration Tests — Event API Endpoints
-**Priority**: P1 | **Estimate**: 1.5h | **Status**: Ready
+**Priority**: P1 | **Estimate**: 1.5h | **Status**: Done
 
 **Description**:
 Integration tests for event API endpoints using FastAPI TestClient and SQLite in-memory.
