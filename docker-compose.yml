@@ -4,8 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-    ports:
-      - "${APP_PORT:-9092}:9092"
+    network_mode: host
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - APP_HOST=0.0.0.0
@@ -40,8 +39,9 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runner
-    ports:
-      - "${NODE_LISTENER_PORT:-5053}:5053/udp"
+    network_mode: host
+#    ports:
+#      - "${NODE_LISTENER_PORT:-5053}:5053/udp"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - APP_HOST=0.0.0.0
