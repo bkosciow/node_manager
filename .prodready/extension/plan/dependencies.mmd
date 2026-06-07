@@ -1,0 +1,42 @@
+flowchart TD
+    subgraph Sprint4["Sprint 4: Event Data Layer"]
+        T012["TASK-012: DeviceEvent Model"]
+        T013["TASK-013: DeviceEvent Schemas"]
+        T014["TASK-014: DeviceEvent CRUD"]
+    end
+
+    subgraph Sprint5["Sprint 5: Event Handler Integration"]
+        T015["TASK-015: Handler - Event Detection"]
+        T016["TASK-016: Worker - Dispatch & Upsert"]
+    end
+
+    subgraph Sprint6["Sprint 6: Event API"]
+        T017["TASK-017: GET events/event_type"]
+        T018["TASK-018: GET events/all"]
+    end
+
+    subgraph Sprint7["Sprint 7: Tests"]
+        T019["TASK-019: Unit Tests - Handler & CRUD"]
+        T020["TASK-020: Integration Tests - API"]
+    end
+
+    T012 --> T013
+    T012 --> T014
+    T013 --> T017
+    T014 --> T016
+    T014 --> T017
+    T014 --> T019
+    T015 --> T016
+    T016 --> T019
+    T017 --> T018
+    T018 --> T020
+
+    style T012 fill:#F59E0B
+    style T013 fill:#F59E0B
+    style T014 fill:#F59E0B
+    style T015 fill:#3B82F6
+    style T016 fill:#3B82F6
+    style T017 fill:#10B981
+    style T018 fill:#10B981
+    style T019 fill:#8B5CF6
+    style T020 fill:#8B5CF6

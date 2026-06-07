@@ -1,0 +1,187 @@
+openapi: "3.1.0"
+info:
+  title: IoT Device Discovery Service — Event Data Extension
+  version: "0.2.0"
+  description: |
+    Extension to the Device Discovery Service.
+    Captures and stores special event payloads (system.pong, system.microplate.hash, system.userspace.hash)
+    from IoT devices, and exposes them via REST API.
+
+servers:
+  - url: http://localhost:8577
+    description: Local development
+
+tags:
+  - name: devices
+    description: Existing device endpoints (unchanged)
+  - name: device-events
+    description: Event data for discovered devices
+
+paths:
+  /api/devices/{device_id}/events:
+    get:
+      summary: Get all event data for a device
+      description: |
+        Returns all stored event types for a device as a JSON object
+        keyed by event_type, with parameters as values.
+      operationId: getDeviceEvents
+      tags:
+        - device-events
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device ID
+        - name: token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: API authentication token (skipped when API_TOKEN is empty)
+      responses:
+        "200":
+          description: Event data keyed by event type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceEventsResponse"
+              example:
+                system.pong:
+                  heap_free: 61152
+                  build: "v1.22.1 on 2024-01-05"
+                  platform: "esp32"
+                system.microplate.hash:
+                  file1.bin: "abc123"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+        "422":
+          description: Validation error
+
+  /api/devices/{device_id}/events/{event_type}:
+    get:
+      summary: Get specific event data for a device
+      description: |
+        Returns the latest parameters for a specific event type
+        (system.pong, system.microplate.hash, or system.userspace.hash).
+      operationId: getDeviceEvent
+      tags:
+        - device-events
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device ID
+        - name: event_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - system.pong
+              - system.microplate.hash
+              - system.userspace.hash
+          description: Event type
+        - name: token
+          in: header
+          required: false
+          schema:
+            type: string
+          description: API authentication token
+      responses:
+        "200":
+          description: Event parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventParameters"
+              example:
+                heap_free: 61152
+                build: "v1.22.1 on 2024-01-05"
+                platform: "esp32"
+        "400":
+          description: Unsupported event type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+        "404":
+          description: Device not found or event type not stored for this device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+        "422":
+          description: Validation error
+
+components:
+  schemas:
+    EventParameters:
+      type: object
+      description: Raw event parameters (structure varies by event type)
+      additionalProperties: true
+
+    DeviceEventsResponse:
+      type: object
+      description: Event data keyed by event type
+      additionalProperties:
+        $ref: "#/components/schemas/EventParameters"
+      example:
+        system.pong:
+          heap_free: 61152
+          platform: "esp32"
+        system.microplate.hash:
+          main.py: "def456"
+
+    DeviceEventResponse:
+      type: object
+      required:
+        - id
+        - device_id
+        - event_type
+        - parameters
+        - updated_at
+      properties:
+        id:
+          type: integer
+          description: Unique event record ID
+          example: 1
+        device_id:
+          type: integer
+          description: FK to devices table
+          example: 1
+        event_type:
+          type: string
+          enum:
+            - system.pong
+            - system.microplate.hash
+            - system.userspace.hash
+          description: Event type identifier
+          example: "system.pong"
+        parameters:
+          type: object
+          description: Raw event parameters (JSON)
+          additionalProperties: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp of last update
+          example: "2026-06-07T14:30:00"
+
+    HTTPError:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error description
