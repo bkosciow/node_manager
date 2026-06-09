@@ -92,3 +92,54 @@
 
 **Priority**: P0
 **Estimate**: S
+
+---
+
+## Epic 4: Repository Management
+
+### US-007: Scan Repository Files and Store Hashes
+**As a** system operator
+**I want to** a standalone script that scans `/upgrades` and calculates SHA256 hashes for all files
+**So that** the database always has current file version information
+
+**Acceptance Criteria**:
+- [ ] Given the `/upgrades` directory contains repos with `_microplate` and/or `_userspace` subfolders, when the scanner runs, then SHA256 hashes are calculated for every file
+- [ ] Given a file exists in a repo folder, when the scanner runs, then a record is created or updated with repo name, repo type, filename, and SHA256
+- [ ] Given a file has been removed from disk, when the scanner runs, then the corresponding DB record is removed
+- [ ] Given the scanner encounters a missing or unreadable file, when it processes the repo, then it logs the error and continues without crashing
+- [ ] Given the scanner runs as a standalone script (not FastAPI), when it connects to the database, then it uses the same `DATABASE_URL` from config
+
+**Priority**: P0
+**Estimate**: M
+
+---
+
+### US-008: List Repositories by Type
+**As a** frontend operator
+**I want to** fetch repositories filtered by type (`_microplate` or `_userspace`)
+**So that** I can see available repos with their files and hashes
+
+**Acceptance Criteria**:
+- [ ] Given repos exist in the database, when I GET `/api/repos?type=microplate`, then I receive a list of repos with name, type, and files (filename + SHA256)
+- [ ] Given no repos match the requested type, when I GET `/api/repos?type=userspace`, then I receive an empty list
+- [ ] Given an invalid type is requested, when I GET `/api/repos?type=invalid`, then a 400 error is returned
+
+**Priority**: P0
+**Estimate**: S
+
+---
+
+### US-009: Assign Repository to Node
+**As a** frontend operator
+**I want to** assign a microplate repo and/or userspace repo to a discovered node
+**So that** I know which software version each node should run
+
+**Acceptance Criteria**:
+- [ ] Given a node exists and a repo of the requested type exists, when I assign the repo to the node, then the assignment is stored in the database
+- [ ] Given a node already has a microplate repo assigned, when I assign a different microplate repo, then the old assignment is replaced
+- [ ] Given a node has no userspace repo, when I assign a userspace repo, then the assignment is created
+- [ ] Given a repo is assigned to multiple nodes, when I query the assignment, then all node-repo links are correct
+- [ ] Given a non-existent node or repo ID, when I attempt assignment, then a 404 error is returned
+
+**Priority**: P0
+**Estimate**: S
