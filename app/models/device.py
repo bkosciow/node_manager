@@ -25,6 +25,9 @@ class Device(Base):
     events: Mapped[list["DeviceEvent"]] = relationship(
         "DeviceEvent", back_populates="device", cascade="all, delete-orphan"
     )
+    repo_assignments: Mapped[list["NodeRepository"]] = relationship(  # noqa: F821
+        "NodeRepository", back_populates="device", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("chip_id", "node", name="uq_chip_id_node"),

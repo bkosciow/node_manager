@@ -21,6 +21,9 @@ class Repository(Base):
     files: Mapped[list["RepositoryFile"]] = relationship(
         "RepositoryFile", back_populates="repository", cascade="all, delete-orphan"
     )
+    node_assignments: Mapped[list["NodeRepository"]] = relationship(  # noqa: F821
+        "NodeRepository", back_populates="repository"
+    )
 
     __table_args__ = (
         UniqueConstraint("name", "repo_type", name="uq_repo_name_type"),
