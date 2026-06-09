@@ -10,6 +10,13 @@ from app.crud.device_event import (
     get_or_create_device,
     upsert_event,
 )
+from app.crud.repository import (
+    cleanup_repository_files,
+    create_repository,
+    get_repository,
+    get_repositories,
+    upsert_repository_file,
+)
 
 __all__ = [
     "create_device",
@@ -20,4 +27,9 @@ __all__ = [
     "get_events",
     "get_or_create_device",
     "upsert_event",
+    "create_repository",
+    "get_repository",
+    "get_repositories",
+    "upsert_repository_file",
+    "cleanup_repository_files",
 ]
