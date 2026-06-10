@@ -473,21 +473,21 @@ Unit tests for DeviceEvent model, Pydantic schemas, and CRUD upsert logic.
 ---
 
 ### TASK-024: Unit Tests — Repository Scanner
-**Priority**: P1 | **Estimate**: 1.5h | **Status**: Ready
+**Priority**: P1 | **Estimate**: 1.5h | **Status**: Done
 
 **Description**:
 Unit tests for repository scanner logic: directory walking, SHA256 computation, file sync.
 
 **Acceptance Criteria**:
-- [ ] Test: scanner walks /upgrades and identifies repos by folder structure
-- [ ] Test: scanner computes correct SHA256 for a file
-- [ ] Test: scanner creates Repository record for new repo
-- [ ] Test: scanner upserts RepositoryFile records (new + updated)
-- [ ] Test: scanner removes RepositoryFile records for deleted files
-- [ ] Test: scanner handles unreadable file (logs error, continues)
-- [ ] Test: scanner handles missing /upgrades directory gracefully
-- [ ] Tests in `tests/unit/test_repo_scanner.py`
-- [ ] Use temp directory with mock file structure
+- [x] Test: scanner walks /upgrades and identifies repos by folder structure
+- [x] Test: scanner computes correct SHA256 for a file
+- [x] Test: scanner creates Repository record for new repo
+- [x] Test: scanner upserts RepositoryFile records (new + updated)
+- [x] Test: scanner removes RepositoryFile records for deleted files
+- [x] Test: scanner handles unreadable file (logs error, continues)
+- [x] Test: scanner handles missing /upgrades directory gracefully
+- [x] Tests in `tests/unit/test_repo_scanner.py`
+- [x] Use temp directory with mock file structure
 
 **Blocked by**: TASK-016
 **Blocks**: None
@@ -519,21 +519,21 @@ Integration tests for device and event REST API endpoints using FastAPI TestClie
 ---
 
 ### TASK-026: Integration Tests — Repo + Assignment API
-**Priority**: P1 | **Estimate**: 2h | **Status**: Ready
+**Priority**: P1 | **Estimate**: 2h | **Status**: Done
 
 **Description**:
 Integration tests for repository and assignment REST API endpoints.
 
 **Acceptance Criteria**:
-- [ ] Test: GET /api/repos?type=microplate — 200, empty list when no repos
-- [ ] Test: GET /api/repos?type=microplate — 200, returns repos with files
-- [ ] Test: GET /api/repos?type=invalid — 400 bad request
-- [ ] Test: POST /api/nodes/1/repos — 200, creates assignment
-- [ ] Test: POST /api/nodes/1/repos — replaces existing assignment of same type
-- [ ] Test: POST /api/nodes/9999/repos — 404 device not found
-- [ ] Test: POST /api/nodes/1/repos with repo_id=9999 — 404 repo not found
-- [ ] Tests in `tests/integration/test_repo_api.py`
-- [ ] Override `get_db` to use SQLite in-memory
+- [x] Test: GET /api/repos?type=microplate — 200, empty list when no repos
+- [x] Test: GET /api/repos?type=microplate — 200, returns repos with files
+- [x] Test: GET /api/repos?type=invalid — 400 bad request
+- [x] Test: POST /api/nodes/1/repos — 200, creates assignment
+- [x] Test: POST /api/nodes/1/repos — replaces existing assignment of same type
+- [x] Test: POST /api/nodes/9999/repos — 404 device not found
+- [x] Test: POST /api/nodes/1/repos with repo_id=9999 — 404 repo not found
+- [x] Tests in `tests/integration/test_repo_api.py`
+- [x] Override `get_db` to use SQLite in-memory
 
 **Blocked by**: TASK-019, TASK-020
 **Blocks**: None

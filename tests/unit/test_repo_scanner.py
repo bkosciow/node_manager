@@ -1,8 +1,39 @@
 """Unit tests for repository scanner logic."""
 
 import hashlib
+import os
+import tempfile
 
-from repo_scanner import compute_sha256, discover_repos
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.db.base import Base
+from app.models.repository import Repository, RepositoryFile
+from app.schemas.repository import RepositoryCreate
+from repo_scanner import compute_sha256, discover_repos, sync_repo_to_db
+
+
+@pytest.fixture
+def db_session():
+    """In-memory SQLite session for DB integration tests."""
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session = Session()
+    yield session
+    session.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def upgrades_dir_with_repo(tmp_path):
+    """Create a temp directory with a mock repo structure."""
+    repo_dir = tmp_path / "node_north" / "_microplate"
+    repo_dir.mkdir(parents=True)
+    (repo_dir / "core.py").write_text("print('hello')")
+    (repo_dir / "utils.py").write_text("def util(): pass")
+    return tmp_path
 
 
 class TestComputeSha256:
@@ -106,3 +137,135 @@ class TestDiscoverRepos:
 
         result = discover_repos(str(tmp_path))
         assert result["node_north"]["microplate"] == ["core.py"]
+
+
+class TestSyncRepoToDb:
+    def test_creates_repository_for_new_repo(
+        self, db_session, upgrades_dir_with_repo, monkeypatch
+    ):
+        """AC: scanner creates Repository record for new repo."""
+        monkeypatch.setattr(
+            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
+        )
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+
+        repos = db_session.query(Repository).all()
+        assert len(repos) == 1
+        assert repos[0].name == "node_north"
+        assert repos[0].repo_type == "microplate"
+
+    def test_upserts_new_files(self, db_session, upgrades_dir_with_repo,
+                               monkeypatch):
+        """AC: scanner upserts RepositoryFile records (new)."""
+        monkeypatch.setattr(
+            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
+        )
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+
+        repo = db_session.query(Repository).first()
+        files = db_session.query(RepositoryFile).filter(
+            RepositoryFile.repository_id == repo.id
+        ).all()
+        assert len(files) == 2
+        filenames = {f.filename for f in files}
+        assert "core.py" in filenames
+        assert "utils.py" in filenames
+        for f in files:
+            assert len(f.sha256) == 64  # valid SHA256 hex
+
+    def test_upserts_updated_files(self, db_session, upgrades_dir_with_repo,
+                                   monkeypatch):
+        """AC: scanner upserts RepositoryFile records (updated hash)."""
+        monkeypatch.setattr(
+            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
+        )
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+
+        original_hash = (
+            db_session.query(RepositoryFile)
+            .filter(RepositoryFile.filename == "core.py")
+            .first()
+            .sha256
+        )
+
+        # Modify the file content
+        (upgrades_dir_with_repo / "node_north" / "_microplate" / "core.py"
+         ).write_text("print('world')")
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+
+        updated_hash = (
+            db_session.query(RepositoryFile)
+            .filter(RepositoryFile.filename == "core.py")
+            .first()
+            .sha256
+        )
+        assert updated_hash != original_hash
+        # Still only 2 files
+        assert db_session.query(RepositoryFile).count() == 2
+
+    def test_removes_deleted_file_records(
+        self, db_session, upgrades_dir_with_repo, monkeypatch
+    ):
+        """AC: scanner removes RepositoryFile records for deleted files."""
+        monkeypatch.setattr(
+            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
+        )
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+        assert db_session.query(RepositoryFile).count() == 2
+
+        # Simulate file deletion - only core.py remains
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py"]
+        )
+
+        remaining = db_session.query(RepositoryFile).all()
+        assert len(remaining) == 1
+        assert remaining[0].filename == "core.py"
+
+    def test_handles_unreadable_file(self, caplog, db_session,
+                                     upgrades_dir_with_repo, monkeypatch):
+        """AC: scanner handles unreadable file (logs error, continues)."""
+        monkeypatch.setattr(
+            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
+        )
+
+        # Make utils.py unreadable
+        utils_path = upgrades_dir_with_repo / "node_north" / "_microplate" \
+            / "utils.py"
+        os.chmod(utils_path, 0o000)
+
+        import logging
+        caplog.set_level(logging.ERROR)
+
+        sync_repo_to_db(
+            db_session, "node_north", "microplate", ["core.py", "utils.py"]
+        )
+
+        # core.py should be synced, utils.py should fail gracefully
+        repo = db_session.query(Repository).first()
+        files = db_session.query(RepositoryFile).filter(
+            RepositoryFile.repository_id == repo.id
+        ).all()
+        # Only core.py should be present (utils.py failed)
+        filenames = {f.filename for f in files}
+        assert "core.py" in filenames
+        assert "utils.py" not in filenames
+        assert any("Error reading file" in r.message for r in caplog.records)
+
+        # Restore permissions for cleanup
+        os.chmod(utils_path, 0o644)
