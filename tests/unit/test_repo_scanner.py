@@ -2,7 +2,6 @@
 
 import hashlib
 import os
-import tempfile
 
 import pytest
 from sqlalchemy import create_engine
@@ -10,7 +9,6 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.models.repository import Repository, RepositoryFile
-from app.schemas.repository import RepositoryCreate
 from repo_scanner import compute_sha256, discover_repos, sync_repo_to_db
 
 

@@ -7,7 +7,6 @@ from app.crud.node_repository import assign_repo_to_node, get_assignments
 from app.db.base import Base
 from app.db.session import engine, SessionLocal
 from app.models.device import Device
-from app.models.node_repository import NodeRepository
 from app.models.repository import Repository
 
 

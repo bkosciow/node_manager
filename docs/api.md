@@ -14,7 +14,21 @@ When `API_TOKEN` is empty (default), authentication is skipped.
 
 ---
 
-## Endpoints
+## Health
+
+### GET /health
+
+Health check endpoint.
+
+**Response** (200):
+
+```json
+{"status": "ok"}
+```
+
+---
+
+## Devices
 
 ### GET /api/devices
 
@@ -36,12 +50,6 @@ List all discovered devices with pagination.
     "chip_id": "ABC123",
     "node": "sensor-1",
     "created_at": "2026-06-07T12:00:00"
-  },
-  {
-    "id": 2,
-    "chip_id": "DEF456",
-    "node": "sensor-2",
-    "created_at": "2026-06-07T12:05:00"
   }
 ]
 ```
@@ -54,7 +62,7 @@ List all discovered devices with pagination.
 
 ### GET /api/devices/{device_id}
 
-Get a single device by ID.
+Get a single device by ID with logged events.
 
 **Path Parameters**:
 
@@ -69,7 +77,11 @@ Get a single device by ID.
   "id": 1,
   "chip_id": "ABC123",
   "node": "sensor-1",
-  "created_at": "2026-06-07T12:00:00"
+  "created_at": "2026-06-07T12:00:00",
+  "events": {
+    "system.pong": {"version": "1.0.0"},
+    "system.microplate.hash": {"sha256": "abc123"}
+  }
 }
 ```
 
@@ -80,15 +92,124 @@ Get a single device by ID.
 
 ---
 
-### GET /health
+## Device Events
 
-Health check endpoint.
+### GET /api/devices/{device_id}/events
+
+Get all logged events for a device, keyed by event type.
 
 **Response** (200):
 
 ```json
-{"status": "ok"}
+{
+  "system.pong": {"version": "1.0.0"},
+  "system.microplate.hash": {"sha256": "abc123"}
+}
 ```
+
+**Errors**:
+
+- `404` — Device not found
+
+---
+
+### GET /api/devices/{device_id}/events/{event_type}
+
+Get parameters for a specific event type.
+
+**Path Parameters**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `device_id` | int | Device ID |
+| `event_type` | string | Event type (e.g., `system.pong`, `system.microplate.hash`, `system.userspace.hash`) |
+
+**Response** (200):
+
+```json
+{"version": "1.0.0"}
+```
+
+**Errors**:
+
+- `400` — Unsupported event type
+- `404` — Device not found or event not found
+
+---
+
+## Repositories
+
+### GET /api/repos
+
+List repositories by type with their files and SHA256 hashes.
+
+**Query Parameters**:
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Repository type: `microplate` or `userspace` |
+
+**Response** (200):
+
+```json
+[
+  {
+    "id": 1,
+    "name": "node_north",
+    "repo_type": "microplate",
+    "created_at": "2026-06-07T12:00:00",
+    "files": [
+      {
+        "id": 1,
+        "filename": "core.py",
+        "sha256": "a1b2c3d4e5f6...",
+        "updated_at": "2026-06-09T08:00:00"
+      }
+    ]
+  }
+]
+```
+
+**Errors**:
+
+- `400` — Invalid repo type
+
+---
+
+## Assignments
+
+### POST /api/nodes/{device_id}/repos
+
+Assign a repository to a node. If the node already has a repo of the same type, the old assignment is replaced.
+
+**Path Parameters**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `device_id` | int | Device (node) ID |
+
+**Request Body**:
+
+```json
+{"repository_id": 1}
+```
+
+**Response** (200):
+
+```json
+{
+  "id": 1,
+  "device_id": 1,
+  "repository_id": 1,
+  "repo_type": "microplate",
+  "assigned_at": "2026-06-09T10:00:00"
+}
+```
+
+**Errors**:
+
+- `404` — Device or repository not found
+- `422` — Validation error
 
 ---
 
@@ -103,4 +224,51 @@ Health check endpoint.
 | `node` | string (255) | Device name |
 | `created_at` | datetime | Timestamp of first discovery |
 
-**Unique constraint**: `(chip_id, node)` — no duplicate pairs.
+**Unique constraint**: `(chip_id, node)`
+
+### DeviceEvent
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Auto-increment primary key |
+| `device_id` | int | FK → devices.id |
+| `event_type` | string (100) | Event identifier |
+| `parameters` | JSON | Event-specific data |
+| `logged_at` | datetime | Timestamp |
+
+**Unique constraint**: `(device_id, event_type)`
+
+### Repository
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Auto-increment primary key |
+| `name` | string (255) | Repository name |
+| `repo_type` | string (50) | `microplate` or `userspace` |
+| `created_at` | datetime | Timestamp |
+
+**Unique constraint**: `(name, repo_type)`
+
+### RepositoryFile
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Auto-increment primary key |
+| `repository_id` | int | FK → repositories.id |
+| `filename` | string (255) | File name |
+| `sha256` | string (64) | SHA256 hash |
+| `updated_at` | datetime | Last updated |
+
+**Unique constraint**: `(repository_id, filename)`
+
+### NodeRepository
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | int | Auto-increment primary key |
+| `device_id` | int | FK → devices.id |
+| `repository_id` | int | FK → repositories.id |
+| `repo_type` | string (50) | `microplate` or `userspace` |
+| `assigned_at` | datetime | Timestamp |
+
+**Unique constraint**: `(device_id, repo_type)`

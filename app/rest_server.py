@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import verify_token
 from app.crud.device import get_device, get_devices
 from app.crud.device_event import get_event, get_events
-from app.crud.node_repository import assign_repo_to_node, get_assignments
+from app.crud.node_repository import assign_repo_to_node
 from app.crud.repository import get_repositories
 from app.db.session import get_db, init_db
 from app.models.device import Device
