@@ -10,6 +10,10 @@ from app.crud.device_event import (
     get_or_create_device,
     upsert_event,
 )
+from app.crud.node_repository import (
+    assign_repo_to_node,
+    get_assignments,
+)
 from app.crud.repository import (
     cleanup_repository_files,
     create_repository,
@@ -32,4 +36,6 @@ __all__ = [
     "get_repositories",
     "upsert_repository_file",
     "cleanup_repository_files",
+    "assign_repo_to_node",
+    "get_assignments",
 ]

@@ -1,64 +1,46 @@
-# ADR-002: In-Memory Cache Strategy
+# ADR-002: In-Memory Cache for Deduplication
 
-**Status**: Accepted
-**Date**: 2026-06-07
-**Context**: IoT Device Discovery Service
+## Status
+Accepted
 
-## Problem
+## Date
+2026-06-09
 
-During message floods, the same `(chip_id, node)` pair arrives repeatedly. We need an in-memory cache to avoid hammering the database with duplicate checks. The cache strategy must balance simplicity, memory usage, and correctness.
+## Context
 
-## Options Considered
-
-### Option A: Unbounded Set (CHOSEN)
-Plain Python `set[tuple[str, str]]`. Each unique device pair is added once. No eviction.
-
-**Pros**: O(1) lookup and insert. Zero complexity. Memory cost is minimal — each tuple is ~100 bytes. 1000 devices = ~100 KB. No TTL management, no eviction logic.
-**Cons**: Grows with unique device count. On service restart, cache is cold (all messages hit DB until re-populated). Mitigation: DB unique constraint handles cold start safely.
-
-### Option B: TTL-Based Cache
-Entries expire after N minutes. On expiry, cache misses fall through to DB check.
-
-**Pros**: Bounded memory if devices churn (appear/disappear). Handles restart more gracefully (less cold start impact if TTL < uptime).
-**Cons**: Adds complexity (TTL tracking, cleanup thread). For our use case, devices are persistent — a discovered device stays discovered. TTL provides no benefit.
-
-### Option C: LRU Cache
-`functools.lru_cache` or `CacheControl` with max size.
-
-**Pros**: Bounded memory
-**Cons**: Evicts known devices — subsequent messages for evicted devices hit DB unnecessarily. Devices are static (not ephemeral), so eviction is counterproductive.
+During message floods, the same `(chip_id, node)` pair arrives repeatedly. Without deduplication, each message triggers a DB query, overwhelming the database. The constitution states: "No duplicates in DB — enforced by unique constraint." The constraint is the final guard, but we need a fast first line of defense.
 
 ## Decision
 
-**Option A: Unbounded Set** — `set[tuple[str, str]]`.
+We will use an **in-memory `set[tuple[str, str]]`** as the primary deduplication layer:
+
+- **Cache hit** → skip DB entirely (O(1) lookup)
+- **Cache miss** → query DB. If found, add to cache (warm). If not found, insert.
+- **No eviction** — cache grows monotonically. At MVP scale (hundreds of devices), memory is negligible (~100 bytes per tuple).
+- **No persistence** — cache is empty after restart. DB unique constraint handles the cold-start window.
+
+The cache is accessed only by the worker thread (single writer, single reader), so no lock is needed.
 
 ## Consequences
 
 ### Positive
-- Simplest possible implementation — one `set.add()` and one `in` check
-- O(1) operations, no locks needed (single-threaded worker accesses it)
-- Memory is negligible at MVP scale (hundreds of devices)
-- No configuration needed (no TTL, no max size)
+- **O(1) dedup** — set lookup is constant time; handles flood without DB I/O
+- **Zero dependencies** — stdlib `set`, no Redis, no external cache server
+- **Thread-safe by design** — single-thread access eliminates lock overhead and deadlock risk
+- **Simple** — no cache invalidation, no TTL, no eviction policy to tune
 
 ### Negative
-- Cold start after restart: cache is empty, all messages hit DB briefly. Mitigation: DB unique constraint on `(chip_id, node)` prevents duplicates. Cache re-populates as messages arrive.
-- Unbounded growth if device count grows to millions. Mitigation: MVP scale is hundreds. Add LRU or persistence in future if needed.
+- **Cold start after restart** — cache is empty; DB gets queries for all recently seen pairs. Mitigated by DB unique constraint (final guard) and brief restart window
+- **Unbounded growth** — cache never shrinks. At MVP scale this is acceptable (hundreds of tuples ≈ KB of memory)
+- **No cross-process sharing** — if multiple scanner instances run, each has its own cache. Not a concern for single-operator deployment
 
-## Implementation Notes
+### Risks
+- **Device count grows to thousands** — cache memory becomes measurable. Mitigation: add LRU eviction or periodic DB-backed cache rebuild when scale increases
+- **Restart during flood** — DB gets burst of queries. Mitigation: DB unique constraint prevents duplicates; brief burst is harmless
 
-```python
-self.cache: set[tuple[str, str]] = set()
+## Alternatives Considered
 
-# In worker:
-key = (chip_id, node)
-if key in self.cache:
-    return  # skip DB entirely
-
-# DB check + insert
-existing = get_device_by_pair(db, chip_id, node)
-if existing is None:
-    create_device(db, DeviceCreate(chip_id=chip_id, node=node))
-    self.cache.add(key)
-else:
-    self.cache.add(key)  # warm cache from DB hit
-```
+1. **DB-only dedup** (no cache) — rejected because every message triggers a DB query; under flood, DB becomes the bottleneck
+2. **Redis SET** — rejected as overkill; adds infrastructure dependency, network latency, and ops overhead for a single-process service
+3. **LRU cache with TTL** — rejected as premature optimization; adds complexity (eviction policy, TTL tuning) for no benefit at MVP scale since devices are persistent (not ephemeral)
+4. **Persistent cache (disk)** — rejected as unnecessary; restart is rare, cold-start window is brief, DB constraint is the final guard

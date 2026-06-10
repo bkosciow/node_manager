@@ -1,45 +1,116 @@
 flowchart TD
-    subgraph Sprint1["Sprint 1: Data Layer & Discovery Engine"]
+    subgraph Sprint1["Sprint 1: Device Data Layer & Discovery"]
         T001["TASK-001: Device Model"]
-        T002["TASK-002: Pydantic Schemas"]
+        T002["TASK-002: Device Schemas"]
         T003["TASK-003: Device CRUD"]
         T004["TASK-004: Handler - Parse & Queue"]
         T005["TASK-005: Worker - Cache & Upsert"]
         T006["TASK-006: Wire into Scanner"]
     end
 
-    subgraph Sprint2["Sprint 2: REST API"]
+    subgraph Sprint2["Sprint 2: Device REST API"]
         T007["TASK-007: Device List Endpoint"]
         T008["TASK-008: Single Device Endpoint"]
     end
 
-    subgraph Sprint3["Sprint 3: Tests"]
-        T009["TASK-009: Unit Tests - Handler & Cache"]
-        T010["TASK-010: Unit Tests - CRUD"]
-        T011["TASK-011: Integration Tests - API"]
+    subgraph Sprint3["Sprint 3: Device Events"]
+        T009["TASK-009: DeviceEvent Model"]
+        T010["TASK-010: DeviceEvent Schemas"]
+        T011["TASK-011: DeviceEvent CRUD"]
+        T012["TASK-012: Event API Endpoints"]
     end
 
+    subgraph Sprint4["Sprint 4: Repository Data & Scanner"]
+        T013["TASK-013: Repository Models"]
+        T014["TASK-014: Repository Schemas"]
+        T015["TASK-015: Repository CRUD"]
+        T016["TASK-016: Repo Scanner Script"]
+    end
+
+    subgraph Sprint5["Sprint 5: Repository API & Assignments"]
+        T017["TASK-017: NodeRepository Model + Schemas"]
+        T018["TASK-018: NodeRepository CRUD"]
+        T019["TASK-019: Repo List Endpoint"]
+        T020["TASK-020: Repo Assignment Endpoint"]
+    end
+
+    subgraph Sprint6["Sprint 6: Tests"]
+        T021["TASK-021: Unit Tests - Handler & Cache"]
+        T022["TASK-022: Unit Tests - Device CRUD"]
+        T023["TASK-023: Unit Tests - Event Model/CRUD"]
+        T024["TASK-024: Unit Tests - Repo Scanner"]
+        T025["TASK-025: Integration Tests - Device + Event API"]
+        T026["TASK-026: Integration Tests - Repo + Assignment API"]
+    end
+
+    %% Sprint 1 dependencies
     T001 --> T002
     T001 --> T003
     T002 --> T003
-    T002 --> T007
     T003 --> T005
-    T003 --> T007
-    T003 --> T010
     T004 --> T005
     T005 --> T006
-    T005 --> T009
-    T007 --> T008
-    T008 --> T011
 
+    %% Sprint 2 dependencies
+    T002 --> T007
+    T003 --> T007
+    T007 --> T008
+
+    %% Sprint 3 dependencies
+    T001 --> T009
+    T009 --> T010
+    T009 --> T011
+    T010 --> T011
+    T008 --> T012
+    T011 --> T012
+
+    %% Sprint 4 dependencies
+    T013 --> T014
+    T013 --> T015
+    T014 --> T015
+    T015 --> T016
+
+    %% Sprint 5 dependencies
+    T001 --> T017
+    T013 --> T017
+    T017 --> T018
+    T015 --> T019
+    T014 --> T019
+    T018 --> T020
+
+    %% Sprint 6 dependencies
+    T005 --> T021
+    T003 --> T022
+    T011 --> T023
+    T016 --> T024
+    T012 --> T025
+    T019 --> T026
+    T020 --> T026
+
+    %% Status colors
     style T001 fill:#10B981
     style T002 fill:#10B981
     style T003 fill:#10B981
     style T004 fill:#10B981
     style T005 fill:#10B981
     style T006 fill:#10B981
-    style T007 fill:#3B82F6
-    style T008 fill:#3B82F6
-    style T009 fill:#F59E0B
-    style T010 fill:#F59E0B
-    style T011 fill:#F59E0B
+    style T007 fill:#10B981
+    style T008 fill:#10B981
+    style T009 fill:#10B981
+    style T010 fill:#10B981
+    style T011 fill:#10B981
+    style T012 fill:#10B981
+    style T021 fill:#10B981
+    style T022 fill:#10B981
+    style T023 fill:#10B981
+    style T025 fill:#10B981
+    style T013 fill:#F59E0B
+    style T014 fill:#F59E0B
+    style T015 fill:#F59E0B
+    style T016 fill:#F59E0B
+    style T017 fill:#F59E0B
+    style T018 fill:#F59E0B
+    style T019 fill:#F59E0B
+    style T020 fill:#F59E0B
+    style T024 fill:#F59E0B
+    style T026 fill:#F59E0B

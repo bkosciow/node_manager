@@ -1,20 +1,50 @@
 openapi: "3.1.0"
 info:
-  title: IoT Device Discovery Service
-  version: "0.1.0"
+  title: IoT Device Discovery Service API
+  version: "1.0.0"
   description: |
     Discovers and deduplicates IoT devices from UDP broadcast messages.
-    Exposes a REST API for the frontend to browse discovered devices.
+    Manages software repositories and assigns them to nodes.
+    Exposes a REST API for the frontend to browse devices, repos, and assignments.
 
 servers:
-  - url: http://localhost:8000
+  - url: http://localhost:9092
     description: Local development
+  - url: http://localhost:9092
+    description: Production (Docker)
 
 tags:
+  - name: health
+    description: Health check
   - name: devices
     description: Device discovery and management
+  - name: device-events
+    description: Logged events per device
+  - name: repos
+    description: Software repository management
+  - name: assignments
+    description: Repo-to-node assignments
 
 paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
+
   /api/devices:
     get:
       summary: List all discovered devices
@@ -40,15 +70,9 @@ paths:
             minimum: 1
             maximum: 1000
           description: Maximum number of records to return
-        - name: token
-          in: header
-          required: false
-          schema:
-            type: string
-          description: API authentication token (skipped when API_TOKEN is empty)
       responses:
         "200":
-          description: A paginated list of devices
+          description: A list of devices
           content:
             application/json:
               schema:
@@ -77,12 +101,6 @@ paths:
             type: integer
             minimum: 1
           description: Device ID
-        - name: token
-          in: header
-          required: false
-          schema:
-            type: string
-          description: API authentication token
       responses:
         "200":
           description: Device details
@@ -92,6 +110,144 @@ paths:
                 $ref: "#/components/schemas/DeviceResponse"
         "404":
           description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+        "422":
+          description: Validation error
+
+  /api/devices/{device_id}/events:
+    get:
+      summary: List logged events for a device
+      description: Returns all logged events for a device, grouped by event type.
+      operationId: listDeviceEvents
+      tags:
+        - device-events
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device ID
+      responses:
+        "200":
+          description: Events grouped by type
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/DeviceEventResponse"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+
+  /api/devices/{device_id}/events/{event_type}:
+    get:
+      summary: Get a specific event for a device
+      description: Fetch a single logged event by device ID and event type.
+      operationId: getDeviceEvent
+      tags:
+        - device-events
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device ID
+        - name: event_type
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Event type (e.g., "firmware_update", "config_change")
+      responses:
+        "200":
+          description: Event details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceEventResponse"
+        "404":
+          description: Event not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+
+  /api/repos:
+    get:
+      summary: List repositories by type
+      description: Return repositories filtered by type with their files and SHA256 hashes.
+      operationId: listRepos
+      tags:
+        - repos
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - microplate
+              - userspace
+          description: Repository type filter
+      responses:
+        "200":
+          description: List of repos with files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RepositoryResponse"
+        "400":
+          description: Invalid repo type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPError"
+
+  /api/nodes/{device_id}/repos:
+    post:
+      summary: Assign a repository to a node
+      description: |
+        Assign a microplate or userspace repo to a discovered node.
+        If the node already has a repo of the same type, the old assignment is replaced.
+      operationId: assignRepoToNode
+      tags:
+        - assignments
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Device (node) ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepoAssignmentRequest"
+      responses:
+        "200":
+          description: Assignment created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoAssignmentResponse"
+        "404":
+          description: Device or repository not found
           content:
             application/json:
               schema:
@@ -127,22 +283,133 @@ components:
           description: Timestamp of first discovery
           example: "2026-06-07T12:00:00"
 
-    DeviceCreate:
+    DeviceEventResponse:
       type: object
       required:
-        - chip_id
-        - node
+        - id
+        - device_id
+        - event_type
+        - parameters
+        - logged_at
       properties:
-        chip_id:
+        id:
+          type: integer
+          example: 1
+        device_id:
+          type: integer
+          example: 1
+        event_type:
           type: string
-          minLength: 1
-          maxLength: 255
-          description: Unique device identifier from the IoT message
-        node:
+          description: Event type identifier
+          example: "firmware_update"
+        parameters:
+          type: object
+          description: Event-specific parameters (JSON)
+          example:
+            version: "1.2.3"
+            status: "success"
+        logged_at:
           type: string
-          minLength: 1
-          maxLength: 255
-          description: Device name
+          format: date-time
+          example: "2026-06-09T10:30:00"
+
+    RepositoryResponse:
+      type: object
+      required:
+        - id
+        - name
+        - repo_type
+        - files
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          description: Repository name (e.g., "node_north")
+          example: "node_north"
+        repo_type:
+          type: string
+          enum:
+            - microplate
+            - userspace
+          example: "microplate"
+        files:
+          type: array
+          description: Files in this repository with their hashes
+          items:
+            $ref: "#/components/schemas/RepositoryFileResponse"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-06-07T12:00:00"
+
+    RepositoryFileResponse:
+      type: object
+      required:
+        - id
+        - filename
+        - sha256
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        filename:
+          type: string
+          description: File name (one level, no subdirs)
+          example: "core.py"
+        sha256:
+          type: string
+          description: SHA256 hash of file contents
+          example: "a1b2c3d4e5f6..."
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-06-09T08:00:00"
+
+    RepoAssignmentRequest:
+      type: object
+      required:
+        - repository_id
+      properties:
+        repository_id:
+          type: integer
+          description: Repository to assign
+          example: 1
+      description: |
+        The repo_type is derived from the repository record.
+        If the node already has a repo of the same type, the old assignment is replaced.
+
+    RepoAssignmentResponse:
+      type: object
+      required:
+        - id
+        - device_id
+        - repository_id
+        - repo_type
+        - assigned_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        device_id:
+          type: integer
+          example: 1
+        repository_id:
+          type: integer
+          example: 1
+        repo_type:
+          type: string
+          enum:
+            - microplate
+            - userspace
+          example: "microplate"
+        assigned_at:
+          type: string
+          format: date-time
+          example: "2026-06-09T10:00:00"
 
     HTTPError:
       type: object
@@ -152,6 +419,7 @@ components:
         detail:
           type: string
           description: Error description
+          example: "Device not found"
 
     HTTPValidationError:
       type: object
@@ -174,3 +442,9 @@ components:
           type: string
         type:
           type: string
+
+  securitySchemes:
+    apiKey:
+      type: http
+      scheme: bearer
+      description: API token (gracefully skipped when API_TOKEN is empty)
