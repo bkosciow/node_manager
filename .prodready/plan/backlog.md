@@ -246,12 +246,12 @@ Add endpoints for logged events: get single event by device+type, list all event
 Create `Repository` and `RepositoryFile` SQLAlchemy models with relationships and unique constraints.
 
 **Acceptance Criteria**:
-- [ ] `Repository` model: `id` (PK), `name` (String(255)), `repo_type` (String(50)), `created_at` (DateTime)
-- [ ] `Repository` unique constraint: `UniqueConstraint("name", "repo_type", name="uq_repo_name_type")`
-- [ ] `RepositoryFile` model: `id` (PK), `repository_id` (FK → repositories.id, CASCADE), `filename` (String(255)), `sha256` (String(64)), `updated_at` (DateTime)
-- [ ] `RepositoryFile` unique constraint: `UniqueConstraint("repository_id", "filename", name="uq_repo_file")`
-- [ ] Relationship: `Repository.files` → `list[RepositoryFile]` with `cascade="all, delete-orphan"`
-- [ ] Models in `app/models/repository.py`, registered in `__init__.py`
+- [x] `Repository` model: `id` (PK), `name` (String(255)), `repo_type` (String(50)), `created_at` (DateTime)
+- [x] `Repository` unique constraint: `UniqueConstraint("name", "repo_type", name="uq_repo_name_type")`
+- [x] `RepositoryFile` model: `id` (PK), `repository_id` (FK → repositories.id, CASCADE), `filename` (String(255)), `sha256` (String(64)), `updated_at` (DateTime)
+- [x] `RepositoryFile` unique constraint: `UniqueConstraint("repository_id", "filename", name="uq_repo_file")`
+- [x] Relationship: `Repository.files` → `list[RepositoryFile]` with `cascade="all, delete-orphan"`
+- [x] Models in `app/models/repository.py`, registered in `__init__.py`
 
 **Blocked by**: None
 **Blocks**: TASK-014, TASK-015
@@ -265,11 +265,11 @@ Create `Repository` and `RepositoryFile` SQLAlchemy models with relationships an
 Create Pydantic schemas for repository creation, file records, and nested API responses.
 
 **Acceptance Criteria**:
-- [ ] `RepositoryCreate` schema: `name: str`, `repo_type: str`
-- [ ] `RepositoryFileResponse` schema: `id`, `filename`, `sha256`, `updated_at`
-- [ ] `RepositoryResponse` schema: `id`, `name`, `repo_type`, `files: list[RepositoryFileResponse]`, `created_at`
-- [ ] `repo_type` validator: must be one of `["microplate", "userspace"]`
-- [ ] Schemas in `app/schemas/repository.py`
+- [x] `RepositoryCreate` schema: `name: str`, `repo_type: str`
+- [x] `RepositoryFileResponse` schema: `id`, `filename`, `sha256`, `updated_at`
+- [x] `RepositoryResponse` schema: `id`, `name`, `repo_type`, `files: list[RepositoryFileResponse]`, `created_at`
+- [x] `repo_type` validator: must be one of `["microplate", "userspace"]`
+- [x] Schemas in `app/schemas/repository.py`
 
 **Blocked by**: TASK-013
 **Blocks**: TASK-015, TASK-019
@@ -283,12 +283,12 @@ Create Pydantic schemas for repository creation, file records, and nested API re
 Implement CRUD for Repository and RepositoryFile: create repo, list by type, file upsert, file cleanup.
 
 **Acceptance Criteria**:
-- [ ] `get_repository(db, repo_id)` → `Optional[Repository]`
-- [ ] `get_repositories(db, repo_type: str)` → `list[Repository]` (with eager-loaded files)
-- [ ] `create_repository(db, data: RepositoryCreate)` → `Repository`
-- [ ] `upsert_repository_file(db, repo_id, filename, sha256)` → `RepositoryFile`
-- [ ] `cleanup_repository_files(db, repo_id, existing_filenames: set[str])` → `int` (deleted count)
-- [ ] Functions in `app/crud/repository.py`, re-exported from `app/crud/__init__.py`
+- [x] `get_repository(db, repo_id)` → `Optional[Repository]`
+- [x] `get_repositories(db, repo_type: str)` → `list[Repository]` (with eager-loaded files)
+- [x] `create_repository(db, data: RepositoryCreate)` → `Repository`
+- [x] `upsert_repository_file(db, repo_id, filename, sha256)` → `RepositoryFile`
+- [x] `cleanup_repository_files(db, repo_id, existing_filenames: set[str])` → `int` (deleted count)
+- [x] Functions in `app/crud/repository.py`, re-exported from `app/crud/__init__.py`
 
 **Blocked by**: TASK-013, TASK-014
 **Blocks**: TASK-016, TASK-019
@@ -302,14 +302,14 @@ Implement CRUD for Repository and RepositoryFile: create repo, list by type, fil
 Create standalone Python script that walks `/upgrades`, computes SHA256 for every file, and syncs to DB. Runs as a separate Docker container (not FastAPI).
 
 **Acceptance Criteria**:
-- [ ] Script at `repo_scanner.py` (standalone, `if __name__ == "__main__"` entrypoint)
-- [ ] Walks `/upgrades/` directory, identifies repos by folder structure: `{repo_name}/{_microplate|_userspace}/`
-- [ ] Computes SHA256 for every file in each repo subfolder
-- [ ] For each repo: creates/updates `Repository` record, upserts `RepositoryFile` records
-- [ ] Removes `RepositoryFile` records for files no longer on disk
-- [ ] Uses same `DATABASE_URL` from config (`app.config.settings`)
-- [ ] Logs errors per file and continues (no crash on unreadable file)
-- [ ] No FastAPI dependency — creates DB session manually with try/finally
+- [x] Script at `repo_scanner.py` (standalone, `if __name__ == "__main__"` entrypoint)
+- [x] Walks `/upgrades/` directory, identifies repos by folder structure: `{repo_name}/{_microplate|_userspace}/`
+- [x] Computes SHA256 for every file in each repo subfolder
+- [x] For each repo: creates/updates `Repository` record, upserts `RepositoryFile` records
+- [x] Removes `RepositoryFile` records for files no longer on disk
+- [x] Uses same `DATABASE_URL` from config (`app.config.settings`)
+- [x] Logs errors per file and continues (no crash on unreadable file)
+- [x] No FastAPI dependency — creates DB session manually with try/finally
 
 **Blocked by**: TASK-015
 **Blocks**: TASK-024
@@ -327,12 +327,12 @@ Create standalone Python script that walks `/upgrades`, computes SHA256 for ever
 Create `NodeRepository` model for repo-to-node assignments and associated Pydantic schemas.
 
 **Acceptance Criteria**:
-- [ ] `NodeRepository` model: `id` (PK), `device_id` (FK → devices.id, CASCADE), `repository_id` (FK → repositories.id, CASCADE), `repo_type` (String(50)), `assigned_at` (DateTime)
-- [ ] Unique constraint: `UniqueConstraint("device_id", "repo_type", name="uq_device_repo_type")`
-- [ ] Relationships: `device` (back_populates), `repository` (back_populates)
-- [ ] `RepoAssignmentCreate` schema: `repository_id: int`
-- [ ] `RepoAssignmentResponse` schema: `id`, `device_id`, `repository_id`, `repo_type`, `assigned_at`
-- [ ] Model in `app/models/node_repository.py`, schemas in `app/schemas/node_repository.py`
+- [x] `NodeRepository` model: `id` (PK), `device_id` (FK → devices.id, CASCADE), `repository_id` (FK → repositories.id, CASCADE), `repo_type` (String(50)), `assigned_at` (DateTime)
+- [x] Unique constraint: `UniqueConstraint("device_id", "repo_type", name="uq_device_repo_type")`
+- [x] Relationships: `device` (back_populates), `repository` (back_populates)
+- [x] `RepoAssignmentCreate` schema: `repository_id: int`
+- [x] `RepoAssignmentResponse` schema: `id`, `device_id`, `repository_id`, `repo_type`, `assigned_at`
+- [x] Model in `app/models/node_repository.py`, schemas in `app/schemas/node_repository.py`
 
 **Blocked by**: TASK-001, TASK-013
 **Blocks**: TASK-018
