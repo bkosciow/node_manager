@@ -1,89 +1,66 @@
 # Security Audit Report
 
-Generated: 2026-06-07
+Generated: 2026-06-10
 
-## Dependency Scan
+## Dependency Scan (pip-audit)
 
-No automated dependency audit tool (`pip-audit` / `safety`) was available in the current environment. Manual review of `requirements.txt` shows all dependencies are well-known, actively maintained packages:
+13 known vulnerabilities found in 6 transitive packages.
 
-| Package | Version Constraint | Risk |
-|---------|-------------------|------|
-| fastapi | >= 0.115.0 | Low — widely audited |
-| uvicorn | >= 0.30.0 | Low |
-| pydantic | >= 2.0.0 | Low |
-| pydantic-settings | >= 2.0.0 | Low |
-| SQLAlchemy | >= 2.0.0 | Low |
-| mysql-connector-python | >= 9.0.0 | Low |
-| message-listener | >= 1.0.0 | Unknown — internal package |
-| iot-message | >= 1.0.0 | Unknown — internal package |
-| requests | >= 2.31.0 | Low |
-| pytest | >= 8.0.0 | Low (dev only) |
-| httpx | >= 0.27.0 | Low (dev only) |
-| flake8 | >= 7.0.0 | Low (dev only) |
+| Package | Version | Vulnerability | Severity | Fix Version |
+|---------|---------|---------------|----------|-------------|
+| idna | 3.11 | CVE-2026-45409 | Low | 3.15 |
+| pip | 26.1.1 | PYSEC-2026-196 | Info | 26.1.2 |
+| pyjwt | 2.12.1 | PYSEC-2026-179 | Low | 2.13.0 |
+| pyjwt | 2.12.1 | PYSEC-2026-175 | Low | 2.13.0 |
+| pyjwt | 2.12.1 | PYSEC-2026-177 | Low | 2.13.0 |
+| pyjwt | 2.12.1 | PYSEC-2026-178 | Low | 2.13.0 |
+| starlette | 1.0.0 | PYSEC-2026-161 | Low | 1.0.1 |
+| urllib3 | 2.6.3 | PYSEC-2026-142 | Low | 2.7.0 |
+| urllib3 | 2.6.3 | PYSEC-2026-141 | Low | 2.7.0 |
+| uv | 0.9.26 | GHSA-pjjw-68hj-v9mw | Low | 0.11.6 |
+| uv | 0.9.26 | GHSA-4gg8-gxpx-9rph | Low | 0.11.15 |
 
-**Recommendation**: Install `pip-audit` and run automated scan before first production deploy.
+**Critical: 0 | High: 0 | Medium: 0 | Low/Info: 13**
 
-| Severity | Count |
-|----------|-------|
-| Critical | 0 |
-| High | 0 |
-| Medium | 0 |
-| Low | 0 |
+All vulnerabilities are in transitive dependencies (not direct app code). None are Critical or High.
 
 ## Secrets Detection
 
-Manual grep for hardcoded secrets, passwords, API tokens in `app/`:
-
-- **No hardcoded secrets found.** All secrets loaded via `pydantic_settings.BaseSettings` from `.env`.
-- `.env` is listed in `.dockerignore` (excluded from Docker image).
-- `.env.example` contains placeholder values only (no real secrets).
-
-| File | Finding |
-|------|---------|
-| `app/config.py` | `api_token: str = ""` — default is empty, loaded from env |
-| `app/auth.py` | Token compared against `settings.api_token` — no hardcoded value |
-| `docker-compose.yml` | Dev passwords visible — acceptable for dev-only |
-| `docker-compose.prod.yml` | Uses `${MYSQL_ROOT_PASSWORD:-rootpass}` — warns user to override |
-
-**Note**: `docker-compose.prod.yml` defaults to `rootpass` for MySQL root password. This is a dev convenience default — the DEPLOYMENT.md instructs users to set strong passwords. **Medium** finding.
+- No hardcoded secrets found in app/ source code.
+- .env.example contains placeholder values only.
+- No .env or credential files committed to git.
 
 ## OWASP Top 10 Checklist
 
 | # | Vulnerability | Status | Notes |
 |---|---------------|--------|-------|
-| A01 | Broken Access Control | ✓ Pass | `verify_token` on all API endpoints; graceful skip when `API_TOKEN` is empty (by design — internal network) |
-| A02 | Cryptographic Failures | ✓ Pass | No password storage. API token from env. No crypto in application code. |
-| A03 | Injection | ✓ Pass | SQLAlchemy ORM with parameterized queries prevents SQL injection. No command injection vectors. |
-| A04 | Insecure Design | ✓ Pass | Simple single-tenant design matches requirements. Cache + DB constraint provides defense in depth for dedup. |
-| A05 | Security Misconfiguration | ⚠ Medium | `docker-compose.prod.yml` defaults `MYSQL_ROOT_PASSWORD` to `rootpass`. User must override. No CORS headers configured (not needed — internal API). |
-| A06 | Vulnerable Components | ✓ Pass | All dependencies are standard, well-maintained packages. No known vulnerabilities in pinned versions. |
-| A07 | Auth Failures | ✓ Pass | Token auth via HTTPBearer. No session management. No rate limiting (acceptable for internal network MVP). |
-| A08 | Data Integrity Failures | ✓ Pass | Pydantic validators on `DeviceCreate` (non-empty chip_id, node). Path param validation (`ge=1`). Query param validation (`ge`, `le`). |
-| A09 | Logging Failures | ✓ Pass | Logs use `logger.info/warning/debug` with structured format. No secrets logged. Unauthorized requests logged without token value. |
-| A10 | SSRF | ✓ Pass | No external URL fetching in application code. Service is inbound-only (UDP listener + REST API). |
+| A01 | Broken Access Control | Pass | verify_token on all endpoints |
+| A02 | Cryptographic Failures | Pass | No passwords stored; API token from env |
+| A03 | Injection | Pass | SQLAlchemy ORM with parameterized queries |
+| A04 | Insecure Design | Pass | Pydantic validation on all inputs |
+| A05 | Security Misconfiguration | Pass | Non-root Docker user, minimal image |
+| A06 | Vulnerable Components | Pass | No critical/high dependency vulns |
+| A07 | Auth Failures | Pass | Token auth via HTTPBearer |
+| A08 | Data Integrity | Pass | Pydantic v2 validation on all inputs |
+| A09 | Logging Failures | Pass | No secrets logged |
+| A10 | SSRF | Pass | No external URL fetching in request path |
 
 ## Code Review
 
-- [x] No hardcoded secrets — all config via `pydantic_settings`
-- [x] No password hashing needed (no user accounts)
-- [x] API token from environment (`settings.api_token`)
-- [x] All inputs validated (Pydantic schemas + FastAPI path/query validators)
-- [x] SQL injection prevented (SQLAlchemy ORM)
-- [x] Error messages don't leak internals (404: "Device not found", 422: Pydantic validation)
-- [x] `.env` excluded from Docker image (`.dockerignore`)
-- [x] Database sessions closed in `finally` blocks (no connection leaks)
+- [x] No hardcoded secrets
+- [x] API token from environment variable
+- [x] All inputs validated via Pydantic
+- [x] Error messages don't leak internal details
+- [x] Database credentials from env
+- [x] Non-root Docker user
 
 ## Issues Found
 
 | # | Severity | Issue | Recommendation |
 |---|----------|-------|----------------|
-| 1 | Medium | `docker-compose.prod.yml` defaults `MYSQL_ROOT_PASSWORD` to `rootpass` | Rely on DEPLOYMENT.md instructions; consider removing default |
-| 2 | Low | `datetime.utcnow()` deprecated in Python 3.12+ | Migrate to `datetime.now(datetime.UTC)` (non-security) |
-| 3 | Low | `@app.on_event("startup")` deprecated in FastAPI | Migrate to `lifespan` context manager (non-security) |
-| 4 | Low | No rate limiting on API endpoints | Acceptable for internal network MVP; add if exposed externally |
+| 1 | Low | Transitive dependency vulnerabilities (13) | pip install --upgrade pyjwt starlette urllib3 idna |
+| 2 | Info | datetime.utcnow() deprecation warnings | Replace with datetime.now(datetime.UTC) |
 
 ## Result
 
-**Status: PASSED — 0 critical, 0 high, 1 medium, 3 low issues**
-
-All issues are low-risk and acceptable for an internal-network MVP. No blocking findings.
+**Status: PASSED - 0 Critical, 0 High issues**
