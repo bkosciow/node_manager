@@ -1,24 +1,30 @@
 """Unit tests for Repository and RepositoryFile SQLAlchemy models."""
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
-from app.db.session import engine, SessionLocal
 from app.models.repository import Repository, RepositoryFile
+
+# In-memory SQLite — isolated from any production database.
+_engine = create_engine(
+    "sqlite:///:memory:", connect_args={"check_same_thread": False}
+)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
 @pytest.fixture(autouse=True)
 def _tables():
     """Create and drop tables for each test."""
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=_engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=_engine)
 
 
 @pytest.fixture
 def db_session() -> Session:
-    session = SessionLocal()
+    session = _TestSession()
     try:
         yield session
     finally:

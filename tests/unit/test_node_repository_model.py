@@ -1,10 +1,10 @@
 """Unit tests for NodeRepository model and schemas."""
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
-from app.db.session import engine, SessionLocal
 from app.models.device import Device
 from app.models.node_repository import NodeRepository
 from app.models.repository import Repository
@@ -13,17 +13,23 @@ from app.schemas.node_repository import (
     RepoAssignmentResponse,
 )
 
+# In-memory SQLite — isolated from any production database.
+_engine = create_engine(
+    "sqlite:///:memory:", connect_args={"check_same_thread": False}
+)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+
 
 @pytest.fixture(autouse=True)
 def _tables():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=_engine)
     yield
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=_engine)
 
 
 @pytest.fixture
 def db_session() -> Session:
-    session = SessionLocal()
+    session = _TestSession()
     try:
         yield session
     finally:

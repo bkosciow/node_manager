@@ -25,7 +25,7 @@ from app.models.repository import Repository
 
 logger = logging.getLogger(__name__)
 
-UPGRADES_DIR = "/upgrades"
+UPGRADES_DIR = "./upgrades"
 REPO_TYPE_MAP = {
     "_microplate": "microplate",
     "_userspace": "userspace",

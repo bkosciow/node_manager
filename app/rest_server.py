@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth import verify_token
 from app.crud.device import get_device, get_devices
 from app.crud.device_event import get_event, get_events
-from app.crud.node_repository import assign_repo_to_node
+from app.crud.node_repository import assign_repo_to_node, get_assignments
 from app.crud.repository import get_repositories
 from app.db.session import get_db, init_db
 from app.models.device import Device
@@ -60,17 +60,28 @@ def get_single_device(
     db: Session = Depends(get_db),
     token: str = Depends(verify_token),
 ) -> dict:
-    """Get device details with logged events."""
+    """Get device details with logged events and assigned repos."""
     device = get_device(db, device_id)
     if device is None:
         raise HTTPException(status_code=404, detail="Device not found")
     events = get_events(db, device_id)
+    assignments = get_assignments(db, device_id)
     return {
         "id": device.id,
         "chip_id": device.chip_id,
         "node": device.node,
         "created_at": device.created_at.isoformat(),
         "events": {e.event_type: e.parameters for e in events},
+        "assigned_repos": [
+            {
+                "id": a.id,
+                "repository_id": a.repository_id,
+                "repository_name": a.repository.name,
+                "repo_type": a.repo_type,
+                "assigned_at": a.assigned_at.isoformat(),
+            }
+            for a in assignments
+        ],
     }
 
 
