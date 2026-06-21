@@ -7,12 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import verify_token
 from app.crud.device import get_device, get_devices
+from app.crud.update_status import get_device_updates, get_repo_file_diff
 from app.crud.device_event import get_event, get_events
 from app.crud.node_repository import assign_repo_to_node, get_assignments
 from app.crud.repository import get_repositories
 from app.db.session import get_db, init_db
-from app.models.device import Device
-from app.schemas.device import DeviceResponse
+from app.schemas.device import DeviceWithUpdates, UpdatesAvailable
 from app.schemas.device_event import SupportedEventTypes
 from app.schemas.node_repository import (
     RepoAssignmentCreate,
@@ -44,14 +44,24 @@ def health() -> dict[str, str]:
 # -- Device endpoints --------------------------------------------------------
 
 
-@app.get("/api/devices", response_model=list[DeviceResponse], tags=["devices"])
+@app.get("/api/devices", response_model=list[DeviceWithUpdates], tags=["devices"])
 def list_devices(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
     token: str = Depends(verify_token),
-) -> list[Device]:
-    return get_devices(db, skip=skip, limit=limit)
+) -> list[DeviceWithUpdates]:
+    devices = get_devices(db, skip=skip, limit=limit)
+    return [
+        DeviceWithUpdates(
+            id=device.id,
+            chip_id=device.chip_id,
+            node=device.node,
+            created_at=device.created_at,
+            updates_available=UpdatesAvailable(**get_device_updates(db, device.id)),
+        )
+        for device in devices
+    ]
 
 
 @app.get("/api/devices/{device_id}", tags=["devices"])
@@ -79,6 +89,9 @@ def get_single_device(
                 "repository_name": a.repository.name,
                 "repo_type": a.repo_type,
                 "assigned_at": a.assigned_at.isoformat(),
+                "updatable_files": get_repo_file_diff(
+                    db, device_id, a.repository_id, a.repo_type
+                ),
             }
             for a in assignments
         ],

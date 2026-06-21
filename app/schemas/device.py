@@ -31,3 +31,18 @@ class DeviceResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UpdatesAvailable(BaseModel):
+    microplate: bool
+    userspace: bool
+
+
+class DeviceWithUpdates(BaseModel):
+    id: int
+    chip_id: str
+    node: str
+    created_at: datetime
+    updates_available: UpdatesAvailable
+
+    model_config = {"from_attributes": True}

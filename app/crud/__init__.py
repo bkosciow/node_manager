@@ -21,6 +21,10 @@ from app.crud.repository import (
     get_repositories,
     upsert_repository_file,
 )
+from app.crud.update_status import (
+    check_update_available,
+    get_device_updates,
+)
 
 __all__ = [
     "create_device",
@@ -38,4 +42,6 @@ __all__ = [
     "cleanup_repository_files",
     "assign_repo_to_node",
     "get_assignments",
+    "check_update_available",
+    "get_device_updates",
 ]

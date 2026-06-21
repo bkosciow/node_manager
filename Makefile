@@ -6,7 +6,7 @@
 # ===========================================
 
 dev: ## Start development server (venv)
-	source .venv/bin/activate && python -m uvicorn app.rest_server:app --reload
+	source .venv/bin/activate && uvicorn app.rest_server:app --reload --host 0.0.0.0 --port 9092
 
 dev-scanner: ## Run UDP device scanner
 	source .venv/bin/activate && python device_scaner.py
