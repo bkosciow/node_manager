@@ -5,17 +5,14 @@
 # Development
 # ===========================================
 
-dev: ## Start development environment
-	docker compose up
+dev: ## Start development server (venv)
+	source .venv/bin/activate && python -m uvicorn app.rest_server:app --reload
 
-dev-build: ## Rebuild and start development
-	docker compose up --build
+dev-scanner: ## Run UDP device scanner
+	source .venv/bin/activate && python device_scaner.py
 
-dev-down: ## Stop development environment
-	docker compose down
-
-dev-logs: ## Follow logs
-	docker compose logs -f app
+dev-repo-scanner: ## Run repository file scanner
+	source .venv/bin/activate && python repo_scanner.py
 
 # ===========================================
 # Testing
