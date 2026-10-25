@@ -11,9 +11,19 @@ from app.crud.update_status import get_device_updates, get_repo_file_diff
 from app.crud.device_event import get_event, get_events
 from app.crud.node_repository import assign_repo_to_node, get_assignments
 from app.crud.repository import get_repositories
+from app.crud.device_ignored_file import (
+    create_ignored_file,
+    delete_ignored_file,
+    get_ignored_files,
+)
 from app.db.session import get_db, init_db
+from app.models.device_ignored_file import DeviceIgnoredFile
 from app.schemas.device import DeviceWithUpdates, UpdatesAvailable
 from app.schemas.device_event import SupportedEventTypes
+from app.schemas.device_ignored_file import (
+    IgnoredFileCreate,
+    IgnoredFileResponse,
+)
 from app.schemas.node_repository import (
     RepoAssignmentCreate,
     RepoAssignmentResponse,
@@ -135,6 +145,81 @@ def get_device_events(
         raise HTTPException(status_code=404, detail="Device not found")
     events = get_events(db, device_id)
     return {e.event_type: e.parameters for e in events}
+
+
+# -- Ignored files endpoints -------------------------------------------------
+
+
+@app.get(
+    "/api/devices/{device_id}/ignored-files",
+    response_model=list[IgnoredFileResponse],
+    tags=["ignored-files"],
+)
+def list_ignored_files(
+    device_id: int = Path(ge=1),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> list[DeviceIgnoredFile]:
+    """List ignored files for a device."""
+    device = get_device(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return get_ignored_files(db, device_id)
+
+
+@app.post(
+    "/api/devices/{device_id}/ignored-files",
+    response_model=IgnoredFileResponse,
+    tags=["ignored-files"],
+)
+def add_ignored_file(
+    device_id: int = Path(ge=1),
+    body: IgnoredFileCreate = ...,
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> DeviceIgnoredFile:
+    """Add an ignored file for a device."""
+    device = get_device(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    try:
+        ignored = create_ignored_file(db, device_id, body)
+    except Exception as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            raise HTTPException(
+                status_code=409,
+                detail=f"File '{body.filename}' is already ignored for {body.repo_type}",
+            )
+        raise
+    if ignored is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return ignored
+
+
+@app.delete(
+    "/api/devices/{device_id}/ignored-files",
+    tags=["ignored-files"],
+)
+def remove_ignored_file(
+    device_id: int = Path(ge=1),
+    repo_type: str = Query(),
+    filename: str = Query(),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> dict:
+    """Remove an ignored file for a device."""
+    device = get_device(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    deleted = delete_ignored_file(db, device_id, repo_type, filename)
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ignored file '{filename}' not found for {repo_type}",
+        )
+    return {"message": f"File '{filename}' removed from ignored list"}
 
 
 # -- Repo endpoints ----------------------------------------------------------

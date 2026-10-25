@@ -25,6 +25,11 @@ from app.crud.update_status import (
     check_update_available,
     get_device_updates,
 )
+from app.crud.device_ignored_file import (
+    create_ignored_file,
+    delete_ignored_file,
+    get_ignored_files,
+)
 
 __all__ = [
     "create_device",
@@ -44,4 +49,7 @@ __all__ = [
     "get_assignments",
     "check_update_available",
     "get_device_updates",
+    "create_ignored_file",
+    "delete_ignored_file",
+    "get_ignored_files",
 ]

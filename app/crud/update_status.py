@@ -1,10 +1,26 @@
 """Check whether a device has pending repository updates."""
 
 from app.models.device_event import DeviceEvent
+from app.models.device_ignored_file import DeviceIgnoredFile
 from app.models.node_repository import NodeRepository
 from app.models.repository import RepositoryFile
 
 from sqlalchemy.orm import Session, joinedload
+
+
+def _get_ignored_filenames(
+    db: Session, device_id: int, repo_type: str
+) -> set[str]:
+    """Return set of filenames ignored for a given device and repo type."""
+    rows = (
+        db.query(DeviceIgnoredFile.filename)
+        .filter(
+            DeviceIgnoredFile.device_id == device_id,
+            DeviceIgnoredFile.repo_type == repo_type,
+        )
+        .all()
+    )
+    return {row.filename for row in rows}
 
 
 def _get_hash_dicts(
@@ -45,6 +61,15 @@ def _get_hash_dicts(
     return device_hashes, repo_hashes
 
 
+def _filter_ignored(
+    device_hashes: dict | None, ignored: set[str]
+) -> dict | None:
+    """Remove ignored filenames from device hash dict."""
+    if device_hashes is None:
+        return None
+    return {k: v for k, v in device_hashes.items() if k not in ignored}
+
+
 def check_update_available(
     db: Session,
     device_id: int,
@@ -56,6 +81,7 @@ def check_update_available(
     Edge cases:
     - No event from device yet  -> False  (no hashes to compare)
     - File present on one side only -> True
+    - Ignored files are excluded from comparison
     """
     device_hashes, repo_hashes = _get_hash_dicts(
         db, device_id, repository_id, repo_type
@@ -63,6 +89,9 @@ def check_update_available(
 
     if device_hashes is None:
         return False
+
+    ignored = _get_ignored_filenames(db, device_id, repo_type)
+    device_hashes = _filter_ignored(device_hashes, ignored)
 
     return device_hashes != repo_hashes
 
@@ -82,6 +111,7 @@ def get_repo_file_diff(
     - ``repo_hash`` is ``None`` if the file only exists on the device
     - Empty list when there is no diff or the device has never reported
       hashes.
+    - Ignored files are excluded from the diff.
     """
     device_hashes, repo_hashes = _get_hash_dicts(
         db, device_id, repository_id, repo_type
@@ -89,6 +119,9 @@ def get_repo_file_diff(
 
     if device_hashes is None:
         return []
+
+    ignored = _get_ignored_filenames(db, device_id, repo_type)
+    device_hashes = _filter_ignored(device_hashes, ignored)
 
     all_filenames = set(device_hashes.keys()) | set(repo_hashes.keys())
 

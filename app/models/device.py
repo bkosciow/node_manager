@@ -10,6 +10,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.device_event import DeviceEvent
+    from app.models.device_ignored_file import DeviceIgnoredFile
 
 
 class Device(Base):
@@ -27,6 +28,11 @@ class Device(Base):
     )
     repo_assignments: Mapped[list["NodeRepository"]] = relationship(  # noqa: F821
         "NodeRepository", back_populates="device", cascade="all, delete-orphan"
+    )
+    ignored_files: Mapped[list["DeviceIgnoredFile"]] = relationship(
+        "DeviceIgnoredFile",
+        back_populates="device",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
