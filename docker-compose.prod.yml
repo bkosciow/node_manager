@@ -1,3 +1,5 @@
+name: node_manager_prod
+
 services:
   api:
     build:
