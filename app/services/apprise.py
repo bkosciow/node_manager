@@ -33,7 +33,7 @@ class Apprise:
 
 class ErrorHandler(logging.Handler):
     def __init__(self):
-        logging.Handler.__init__(self=self)
+        logging.Handler.__init__(self)
         self.headers = {
             'content-type': 'application/json',
         }
