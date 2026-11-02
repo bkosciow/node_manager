@@ -76,11 +76,18 @@ def check_update_available(
     repository_id: int,
     repo_type: str,
 ) -> bool:
-    """Return True if any file hash in the repo differs from the device.
+    """Return True if any *repo* file is missing or changed on the device.
+
+    The comparison is asymmetric: only files present in the repository can
+    set the flag. An upgrade pushes repo state to the device and can never
+    remove a file the repo doesn't know, so device-only files (e.g.
+    node-local scripts or secrets) never trigger an upgrade — they remain
+    visible as informational entries in ``get_repo_file_diff``.
 
     Edge cases:
     - No event from device yet  -> False  (no hashes to compare)
-    - File present on one side only -> True
+    - Repo file missing on device or hash differs -> True
+    - Device-only files -> never set the flag
     - Ignored files are excluded from comparison
     """
     device_hashes, repo_hashes = _get_hash_dicts(
@@ -91,9 +98,12 @@ def check_update_available(
         return False
 
     ignored = _get_ignored_filenames(db, device_id, repo_type)
-    device_hashes = _filter_ignored(device_hashes, ignored)
+    repo_hashes = {k: v for k, v in repo_hashes.items() if k not in ignored}
 
-    return device_hashes != repo_hashes
+    return any(
+        device_hashes.get(filename) != repo_hash
+        for filename, repo_hash in repo_hashes.items()
+    )
 
 
 def get_repo_file_diff(
@@ -108,10 +118,13 @@ def get_repo_file_diff(
     "repo_hash": str | None}``
 
     - ``device_hash`` is ``None`` if the file only exists in the repo
-    - ``repo_hash`` is ``None`` if the file only exists on the device
+    - ``repo_hash`` is ``None`` if the file only exists on the device —
+      such entries are informational only (node detail view); they never
+      set the ``updates_available`` flag and are excluded from the
+      upgrade trigger
     - Empty list when there is no diff or the device has never reported
       hashes.
-    - Ignored files are excluded from the diff.
+    - Ignored files are excluded from the diff (both sides).
     """
     device_hashes, repo_hashes = _get_hash_dicts(
         db, device_id, repository_id, repo_type
@@ -122,6 +135,7 @@ def get_repo_file_diff(
 
     ignored = _get_ignored_filenames(db, device_id, repo_type)
     device_hashes = _filter_ignored(device_hashes, ignored)
+    repo_hashes = {k: v for k, v in repo_hashes.items() if k not in ignored}
 
     all_filenames = set(device_hashes.keys()) | set(repo_hashes.keys())
 

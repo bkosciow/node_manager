@@ -205,9 +205,36 @@ class TestHashComparisonWithIgnored:
     def test_ignored_file_excluded_from_update_check(
         self, db_session: Session
     ):
-        """check_update_available should ignore marked files."""
+        """A file present on both sides sets the flag unless ignored."""
         device_hashes = {"core.bin": _HASH_A, "my.conf": "xyz"}
-        repo_files = {"core.bin": _HASH_A}
+        repo_files = {"core.bin": _HASH_A, "my.conf": _HASH_B}
+        device, repo = _setup_device_with_repo_and_event(
+            db_session,
+            device_hashes=device_hashes,
+            repo_files=repo_files,
+        )
+
+        # my.conf diverges between device and repo -> update available
+        assert check_update_available(
+            db_session, device.id, repo.id, "microplate"
+        ) is True
+
+        create_ignored_file(
+            db_session,
+            device.id,
+            IgnoredFileCreate(repo_type="microplate", filename="my.conf"),
+        )
+
+        assert check_update_available(
+            db_session, device.id, repo.id, "microplate"
+        ) is False
+
+    def test_ignored_repo_file_does_not_trigger_update(
+        self, db_session: Session
+    ):
+        """Ignoring a repo file that is absent on the device clears the flag."""
+        device_hashes = {"core.bin": _HASH_A}
+        repo_files = {"core.bin": _HASH_A, "my.conf": _HASH_B}
         device, repo = _setup_device_with_repo_and_event(
             db_session,
             device_hashes=device_hashes,

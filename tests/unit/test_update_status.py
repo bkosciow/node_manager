@@ -127,7 +127,8 @@ class TestCheckUpdateAvailable:
             db_session, device.id, repo.id, "microplate"
         ) is True
 
-    def test_update_when_file_extra_on_device(self, db_session: Session):
+    def test_no_update_when_file_extra_on_device(self, db_session: Session):
+        """Device-only files never set the flag (repo-driven comparison)."""
         device_hashes = {"core.bin": _HASH_A, "extra.bin": _HASH_B}
         repo_files = {"core.bin": _HASH_A}
         device, repo = _setup_device_with_repo_and_event(
@@ -137,7 +138,33 @@ class TestCheckUpdateAvailable:
         )
         assert check_update_available(
             db_session, device.id, repo.id, "microplate"
+        ) is False
+
+    def test_update_when_extra_and_missing_files(self, db_session: Session):
+        """A missing repo file sets the flag even with device-only extras."""
+        device_hashes = {"core.bin": _HASH_A, "extra.bin": _HASH_B}
+        repo_files = {"core.bin": _HASH_A, "boot.bin": _HASH_B}
+        device, repo = _setup_device_with_repo_and_event(
+            db_session,
+            device_hashes=device_hashes,
+            repo_files=repo_files,
+        )
+        assert check_update_available(
+            db_session, device.id, repo.id, "microplate"
         ) is True
+
+    def test_no_update_when_repo_empty_device_has_files(
+        self, db_session: Session
+    ):
+        """An empty repo has nothing to push -> no update."""
+        device, repo = _setup_device_with_repo_and_event(
+            db_session,
+            device_hashes={"extra.bin": _HASH_B},
+            repo_files={},
+        )
+        assert check_update_available(
+            db_session, device.id, repo.id, "microplate"
+        ) is False
 
     def test_no_update_when_no_event_from_device(self, db_session: Session):
         _, repo = _setup_device_with_repo_and_event(
