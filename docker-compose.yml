@@ -21,6 +21,9 @@ services:
       - SL_IVKEY=${SL_IVKEY:-}
       - SL_DATAKEY=${SL_DATAKEY:-}
       - SL_PASSPHRASE=${SL_PASSPHRASE:-}
+      - NODE_LISTENER=${NODE_LISTENER:-}
+      - BASE_URL=${BASE_URL:-}
+      - UPGRADES_DIR=${UPGRADES_DIR:-./upgrades}
     restart: unless-stopped
     deploy:
       resources:

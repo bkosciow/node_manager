@@ -2,6 +2,7 @@ from app.models.device import Device
 from app.models.device_event import DeviceEvent
 from app.models.device_ignored_file import DeviceIgnoredFile
 from app.models.node_repository import NodeRepository
+from app.models.node_update import NodeUpdate
 from app.models.repository import Repository, RepositoryFile
 
 __all__ = [
@@ -9,6 +10,7 @@ __all__ = [
     "DeviceEvent",
     "DeviceIgnoredFile",
     "NodeRepository",
+    "NodeUpdate",
     "Repository",
     "RepositoryFile",
 ]

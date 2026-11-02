@@ -14,6 +14,13 @@ from app.crud.node_repository import (
     assign_repo_to_node,
     get_assignments,
 )
+from app.crud.node_update import (
+    create_node_update,
+    get_node_update_by_token,
+    list_node_updates,
+    record_fetched_file,
+    record_validated_file,
+)
 from app.crud.repository import (
     cleanup_repository_files,
     create_repository,
@@ -47,6 +54,11 @@ __all__ = [
     "cleanup_repository_files",
     "assign_repo_to_node",
     "get_assignments",
+    "create_node_update",
+    "get_node_update_by_token",
+    "list_node_updates",
+    "record_fetched_file",
+    "record_validated_file",
     "check_update_available",
     "get_device_updates",
     "create_ignored_file",

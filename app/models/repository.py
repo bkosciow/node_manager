@@ -1,11 +1,15 @@
 """Repository and RepositoryFile models for software repository management."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.node_update import NodeUpdate
 
 
 class Repository(Base):
@@ -23,6 +27,9 @@ class Repository(Base):
     )
     node_assignments: Mapped[list["NodeRepository"]] = relationship(  # noqa: F821
         "NodeRepository", back_populates="repository"
+    )
+    updates: Mapped[list["NodeUpdate"]] = relationship(  # noqa: F821
+        "NodeUpdate", back_populates="repository"
     )
 
     __table_args__ = (

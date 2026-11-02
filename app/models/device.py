@@ -11,6 +11,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.device_event import DeviceEvent
     from app.models.device_ignored_file import DeviceIgnoredFile
+    from app.models.node_update import NodeUpdate
 
 
 class Device(Base):
@@ -31,6 +32,11 @@ class Device(Base):
     )
     ignored_files: Mapped[list["DeviceIgnoredFile"]] = relationship(
         "DeviceIgnoredFile",
+        back_populates="device",
+        cascade="all, delete-orphan",
+    )
+    updates: Mapped[list["NodeUpdate"]] = relationship(  # noqa: F821
+        "NodeUpdate",
         back_populates="device",
         cascade="all, delete-orphan",
     )

@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     node_id: str = ""
     node_listener: str = ""
     node_listener_port: int = 5053
+    upgrades_dir: str = "./upgrades"
+    base_url: str = ""
     sl_statisiv: str = ""
     sl_ivkey: str = ""
     sl_datakey: str = ""
