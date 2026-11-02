@@ -31,7 +31,7 @@ docs/superpowers
 /upgrades/*
 !/upgrades/.gitkeep
 
-/.ai
+
 /agents
 /skills
 /.claude/*
@@ -39,8 +39,10 @@ docs/superpowers
 /t-shirt-size-install.sh
 AGENTS.md
 
+/.qwen/agents/*
+/.qwen/skills/*
 .coverage
 
 T-SHIRT-README.md
-
+HOW-A-STANDARD-LOOKS.md
 
