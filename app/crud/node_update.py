@@ -1,12 +1,18 @@
 """CRUD operations for NodeUpdate upgrade sessions.
 
 New query code: SQLAlchemy 2.0-style ``select()`` (query-style standard).
+Progress rows (``NodeUpdateFile``) advance monotonically:
+``pending → fetched → validated``; the first timestamp wins and repeated
+calls are no-ops.
 """
 
+from datetime import datetime
+
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.node_update import NodeUpdate
+from app.models.node_update_file import NodeUpdateFile
 from app.schemas.node_update import NodeUpdateCreate
 
 
@@ -19,6 +25,12 @@ def create_node_update(db: Session, data: NodeUpdateCreate) -> NodeUpdate:
         repo_type=data.repo_type,
         files=data.files,
     )
+    # Pre-create one pending progress row per allow-list file. Ordered
+    # de-dup: duplicate filenames would violate uq_node_update_file.
+    for filename in dict.fromkeys(data.files):
+        db_obj.progress.append(
+            NodeUpdateFile(filename=filename, status="pending")
+        )
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -32,23 +44,50 @@ def get_node_update_by_token(db: Session, token: str) -> NodeUpdate | None:
 
 def list_node_updates(db: Session, device_id: int) -> list[NodeUpdate]:
     """List sessions for a device, newest first (id breaks same-second ties)."""
+    # Progress rows arrive ordered by filename (relationship order_by).
+    # Joined collection loads return one row per child -> .unique().
     stmt = (
         select(NodeUpdate)
         .where(NodeUpdate.device_id == device_id)
+        .options(joinedload(NodeUpdate.progress))
         .order_by(NodeUpdate.created_at.desc(), NodeUpdate.id.desc())
     )
-    return list(db.execute(stmt).scalars().all())
+    return list(db.execute(stmt).scalars().unique().all())
 
 
 def record_fetched_file(
     db: Session, token: str, filename: str
 ) -> NodeUpdate | None:
-    """Append filename to ``fetched_files`` (dedup); commit + refresh."""
+    """Advance the session's progress row for ``filename`` to ``fetched``.
+
+    Idempotent: an already-``fetched``/``validated`` row is left untouched
+    (first timestamp wins). A missing row (a session predating the
+    progress table) is inserted with ``status="fetched"``.
+    """
     obj = get_node_update_by_token(db, token)
     if obj is None:
         return None
-    if filename not in obj.fetched_files:
-        obj.fetched_files = [*obj.fetched_files, filename]
+    row = db.execute(
+        select(NodeUpdateFile).where(
+            NodeUpdateFile.node_update_id == obj.id,
+            NodeUpdateFile.filename == filename,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        db.add(
+            NodeUpdateFile(
+                node_update_id=obj.id,
+                filename=filename,
+                status="fetched",
+                fetched_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
+        db.refresh(obj)
+        return obj
+    if row.status == "pending":
+        row.status = "fetched"
+        row.fetched_at = datetime.utcnow()
         db.commit()
         db.refresh(obj)
     return obj
@@ -57,12 +96,37 @@ def record_fetched_file(
 def record_validated_file(
     db: Session, token: str, filename: str
 ) -> NodeUpdate | None:
-    """Append filename to ``validated_files`` (dedup); commit + refresh."""
+    """Advance the session's progress row for ``filename`` to ``validated``.
+
+    Idempotent: an already-``validated`` row is left untouched (first
+    timestamp wins; ``fetched_at`` is preserved). A missing row (a session
+    predating the progress table) is inserted with ``status="validated"``
+    and no ``fetched_at`` (validate-without-fetch).
+    """
     obj = get_node_update_by_token(db, token)
     if obj is None:
         return None
-    if filename not in obj.validated_files:
-        obj.validated_files = [*obj.validated_files, filename]
+    row = db.execute(
+        select(NodeUpdateFile).where(
+            NodeUpdateFile.node_update_id == obj.id,
+            NodeUpdateFile.filename == filename,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        db.add(
+            NodeUpdateFile(
+                node_update_id=obj.id,
+                filename=filename,
+                status="validated",
+                validated_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
+        db.refresh(obj)
+        return obj
+    if row.status != "validated":
+        row.status = "validated"
+        row.validated_at = datetime.utcnow()
         db.commit()
         db.refresh(obj)
     return obj

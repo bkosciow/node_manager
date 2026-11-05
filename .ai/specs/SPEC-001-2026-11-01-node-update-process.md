@@ -158,6 +158,76 @@ $ curl .../api/devices/1/updates
 > **Change vs. current state**: Today a failed upgrade leaves no trace. After
 > this change, the session record shows exactly where it stopped.
 
+### Story 4 — Happy path: per-file progress with timestamps (2026-11-03)
+
+> **Persona**: Bartek, watching an upgrade complete. Wants to know not
+> just *which* files the node moved, but *when* each one landed and
+> what stage it is in.
+
+```
+$ curl -H "Authorization: Bearer $TOKEN" localhost:8577/api/devices/1/updates
+[{"token": "3f9c…", "repo_type": "userspace",
+  "files": ["config.py", "main.py"],
+  "progress": [
+    {"filename": "config.py", "status": "validated",
+     "fetched_at": "2026-11-03T09:14:02", "validated_at": "2026-11-03T09:14:05"},
+    {"filename": "main.py", "status": "fetched",
+     "fetched_at": "2026-11-03T09:14:31", "validated_at": null}
+  ], ...}]
+```
+
+> **Behind the scenes**: the trigger pre-creates one `pending`
+> `NodeUpdateFile` row per allow-list file. Each `GET /get/<file>`
+> advances the row to `fetched` (+`fetched_at`); each matching
+> `POST /validate/<file>` advances it to `validated` (+`validated_at`).
+> Repeated calls are no-ops — first timestamps win. Progress entries
+> are ordered by filename.
+
+> **Change vs. current state**: the listing response loses the
+> `fetched_files`/`validated_files` string lists and gains `progress`
+> (per-file state + timing) — a breaking response-shape change for
+> consumers of `GET /api/devices/{id}/updates`.
+
+### Story 5 — Alternative: a mid-upgrade stall is legible (2026-11-03)
+
+> **Persona**: Bartek, flaky WiFi. The node fetched `config.py` but
+> died before validation; `main.py` was never requested.
+
+The listing shows `config.py` `status: "fetched"` (`fetched_at` set,
+`validated_at: null`) and `main.py` `"pending"` (both `null`) —
+exactly where the upgrade stopped. Re-triggering creates a fresh
+session/token; the stalled one is kept as history.
+
+> **Behind the scenes**: no new mechanism — the operator reads
+> `progress` state instead of inferring it from two flat string lists.
+
+> **Change vs. current state**: today "where it stopped" is only half
+> visible (`validated_files ⊆ fetched_files ⊆ files`) with no timing;
+> now it is explicit per file.
+
+### Story 6 — Edge case: legacy sessions + backfill on prod (2026-11-03)
+
+> **Persona**: Bartek (or the on-call DBA), deploying the new code to
+> a DB that already contains sessions created by the old code.
+
+```
+$ DATABASE_URL=mysql://... python scripts/backfill_node_update_files.py
+Backfilled 3 session(s), skipped 0 already-populated
+$ ... backfill_node_update_files.py --drop-old-columns
+Dropped legacy column node_updates.fetched_files
+Dropped legacy column node_updates.validated_files
+```
+
+Legacy sessions keep working: if an old session re-fetches or
+re-validates, `record_*` inserts its missing progress row on demand
+(legacy fallback path). Re-running the script is a no-op (sessions
+that already have rows are skipped).
+
+> **Change vs. current state**: fresh dev databases never had the
+> legacy columns; a live MySQL DB keeps them until the
+> `--drop-old-columns` flag runs — `create_all` cannot drop columns
+> (schema = models, no migration tooling).
+
 ## Architecture
 
 ```
@@ -244,8 +314,6 @@ class NodeUpdate(Base):
         Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
     repo_type: Mapped[str] = mapped_column(String(50), nullable=False)
     files: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    fetched_files: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    validated_files: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -268,27 +336,74 @@ class NodeUpdate(Base):
   `repository` (`Repository`, back_populates `updates`).
   Add `updates` relationships on `Device` and `Repository`
   (`cascade="all, delete-orphan"` on the Device side).
+- `progress: Mapped[list["NodeUpdateFile"]]` — owned children,
+  `cascade="all, delete-orphan"` (named `progress` to avoid colliding
+  with the `files` JSON column); `order_by="NodeUpdateFile.filename"`
+  on the relationship so collections (lazy and `joinedload`) come back
+  filename-ordered. One pending row per allow-list file, pre-created
+  at session creation (ordered-deduped).
+
+### New: `NodeUpdateFile` (`app/models/node_update_file.py`)
+
+```python
+class NodeUpdateFile(Base):
+    __tablename__ = "node_update_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    node_update_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("node_updates.id", ondelete="CASCADE"), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("node_update_id", "filename", name="uq_node_update_file"),
+    )
+```
+
+- Per-file progress row owned by the session (mirrors `RepositoryFile`).
+- `status` is a monotonic lifecycle `pending → fetched → validated`;
+  first timestamps win and repeated `record_*` calls are no-ops.
+  A missing row (a session predating the table) is inserted on demand
+  by `record_*` (legacy fallback).
+- The old `fetched_files`/`validated_files` JSON columns are dropped
+  from the model. A live MySQL DB keeps the physical columns until
+  `scripts/backfill_node_update_files.py --drop-old-columns` runs
+  (schema = models, no migration tooling — `create_all` does not
+  drop or alter columns).
 
 ### Schemas (`app/schemas/node_update.py`)
 
 - `NodeUpdateCreate` — `token`, `device_id`, `repository_id`, `repo_type`,
   `files: list[str]` (validators: non-empty files, valid repo_type)
+- `NodeUpdateFileResponse` — `filename`, `status`,
+  `fetched_at: datetime | None`, `validated_at: datetime | None`,
+  `from_attributes` (nested-ORM precedent: `RepositoryFileResponse`)
 - `NodeUpdateResponse` — all persisted fields (no Create inheritance,
   per schema standard), `model_config = {"from_attributes": True}` so
-  `GET /api/devices/{id}/updates` can return ORM rows via `response_model`
+  `GET /api/devices/{id}/updates` can return ORM rows via `response_model`;
+  includes `progress: list[NodeUpdateFileResponse]` (replaces the
+  removed `fetched_files`/`validated_files` lists)
 - `UpdateValidateRequest` — `hash: str`
 
 ### CRUD (`app/crud/node_update.py`)
 
 | Function | Signature | Returns |
 |---|---|---|
-| create | `create_node_update(db, data: NodeUpdateCreate)` | `NodeUpdate` |
+| create | `create_node_update(db, data: NodeUpdateCreate)` | `NodeUpdate` (pre-creates pending `NodeUpdateFile` rows, ordered-deduped) |
 | get by token | `get_node_update_by_token(db, token: str)` | `NodeUpdate | None` |
-| list per device | `list_node_updates(db, device_id: int)` | `list[NodeUpdate]` (created_at desc, `id` desc tiebreaker) |
+| list per device | `list_node_updates(db, device_id: int)` | `list[NodeUpdate]` (created_at desc, `id` desc tiebreaker; `joinedload(NodeUpdate.progress)` ordered by filename) |
 | record fetch | `record_fetched_file(db, token, filename)` | `NodeUpdate | None` |
 | record validate | `record_validated_file(db, token, filename)` | `NodeUpdate | None` |
 
-Record methods append (dedup), commit, refresh. CRUD owns commits
+Record methods upsert the session's `NodeUpdateFile` row: advance
+`pending → fetched` / `→ validated` and set the first timestamp;
+repeats are no-ops (no commit, no timestamp overwrite); a missing
+row is inserted (legacy-session fallback). CRUD owns commits
 (`session-commit` standard).
 
 Query style: all functions in this new CRUD file use SQLAlchemy 2.0-style
@@ -360,7 +475,7 @@ Consequences:
 | Unknown token | 404 `{"detail": "Upgrade not found"}` |
 | Filename not in session's `files` | 404 `{"detail": "File not part of this upgrade"}` |
 | No `RepositoryFile` record, or file missing on disk | 404 `{"detail": "File not found"}` |
-| Success | 200, `FileResponse` (octet-stream, as attachment). Appends filename to `fetched_files`. |
+| Success | 200, `FileResponse` (octet-stream, as attachment). Advances the session's progress row for the filename to `fetched` (+ `fetched_at`). |
 
 Physical path: `{settings.upgrades_dir}/{repository.name}/_{repo_type}/{filename}`
 — the same layout `repo_scanner.py` walks (`REPO_TYPE_MAP` inverse:
@@ -374,13 +489,17 @@ Body: `{"hash": "<sha256 hex>"}`
 |---|---|
 | Unknown token / file not in session | 404 (same as get) |
 | No `RepositoryFile` record for the filename (e.g. re-scanned out of the repo after the session was created) | 404 `{"detail": "Hash not found"}` |
-| Hash matches `RepositoryFile.sha256` | 200 `{"valid": true}` — appends filename to `validated_files` |
+| Hash matches `RepositoryFile.sha256` | 200 `{"valid": true}` — advances the progress row to `validated` (+ `validated_at`) |
 | Mismatch | 400 `{"valid": false, "received_hash": ..., "expected_hash": ...}` |
 
 ### `GET /api/devices/{device_id}/updates` — sessions (auth'd)
 
 - 404 if device missing; otherwise `list[NodeUpdateResponse]`, newest first.
-- This is the "in-progress upgrades" view (Story 1 step 3, Story 3).
+  Each session carries `progress` (per-file status + `fetched_at` /
+  `validated_at`, ordered by filename) — a **response-shape change**:
+  the `fetched_files` / `validated_files` lists no longer exist.
+- This is the "in-progress upgrades" view (Story 1 step 3, Story 3;
+  per-file tracking in Stories 4–6).
 
 ## Configuration
 
@@ -421,9 +540,11 @@ Reused as-is: `node_listener`, `node_listener_port` (broadcast target),
 
 ## Testing & Verification
 
-- **Unit** (`tests/unit/test_node_update_crud.py`): create, get-by-token,
-  record_fetched/validated dedup + commit/refresh idiom, one class per
-  CRUD fn (per `testing/unit-test-idiom`).
+- **Unit** (`tests/unit/test_node_update_crud.py`): create (pending
+  progress rows, duplicate-filename dedup), get-by-token,
+  record_fetched/validated status-advance + first-timestamp-wins +
+  legacy-row-insert + commit/refresh idiom, joinedload ordering, one
+  class per CRUD fn (per `testing/unit-test-idiom`).
 - **Integration** (`tests/integration/`):
   - trigger: seed device + NodeRepository + RepositoryFile + a
     `system.userspace.hash` event with a diff; monkeypatch
@@ -437,9 +558,16 @@ Reused as-is: `node_listener`, `node_listener_port` (broadcast target),
     `NodeUpdate.files`; assert 404 nothing-to-update when the diff
     consists of device-only entries only.
   - serve/validate: create a session, write a temp file into
-    `upgrades_dir` fixture; GET returns bytes + records fetch; POST with
-    good hash → 200 + recorded, bad hash → 400 with payload; foreign
-    filename → 404.
+    `upgrades_dir` fixture; GET returns bytes + advances the progress
+    row to `fetched`; POST with good hash → 200 + row advanced to
+    `validated`, bad hash → 400 with payload; foreign filename → 404.
+    Full-lifecycle test: trigger → GET → POST → listing shows
+    `status: "validated"` with both timestamps set.
+- **Backfill script** (`scripts/backfill_node_update_files.py`):
+  dry-run against a scratch legacy SQLite DB (a `node_updates` row
+  with the old JSON columns, which the model no longer maps); assert
+  statuses/NULL timestamps, idempotent re-run,
+  `--drop-old-columns` drops one column per guarded ALTER.
 - **Manual (test node `node-north-001`)**: run dev server +
   `device_scaner.py` + `repo_scanner.py`; change a `_userspace` file;
   `POST /api/devices/{id}/update/userspace`; watch ESP serial log
@@ -463,6 +591,16 @@ Reused as-is: `node_listener`, `node_listener_port` (broadcast target),
 - [x] 13. Verify: `/verify-standards`, lint, test run, build
 - [ ] 14. Manual verification on node-north-001 (operator step)
 - [x] 15. Sync spec: checklist status, review section, lessons
+
+### Per-file progress tracking (2026-11-03)
+- [x] 16. Model: `NodeUpdateFile` (`app/models/node_update_file.py`) + registration (`models/__init__.py`, `db/session.py`)
+- [x] 17. `NodeUpdate`: drop `fetched_files`/`validated_files` columns, add `progress` relationship
+- [x] 18. CRUD: pre-create pending rows (deduped), upsert recorders, `joinedload` in list
+- [x] 19. Schemas: `NodeUpdateFileResponse`, `NodeUpdateResponse.progress`
+- [x] 20. Unit tests: status advance, first-timestamp-wins, dedup, legacy fallback, joinedload
+- [x] 21. Integration tests: progress assertions + full-lifecycle test
+- [x] 22. Backfill script: `scripts/backfill_node_update_files.py`
+- [x] 23. Verify: pytest + flake8 + build + script dry-run
 
 ## Implementation Review (2026-11-02)
 
@@ -511,6 +649,17 @@ Reused as-is: `node_listener`, `node_listener_port` (broadcast target),
 
 ## Changelog
 
+### 2026-11-03
+- Per-file progress tracking: new `NodeUpdateFile` table
+  (`pending → fetched → validated`, `fetched_at`/`validated_at`,
+  `uq_node_update_file`); `NodeUpdate` drops the `fetched_files` /
+  `validated_files` JSON lists (the `files` allow-list is kept) and
+  gains a `progress` relationship; `NodeUpdateResponse` now returns
+  `progress: list[NodeUpdateFileResponse]` instead of the two lists
+  (breaking response-shape change on
+  `GET /api/devices/{id}/updates`). One-off backfill + legacy-column
+  drop in `scripts/backfill_node_update_files.py`.
+
 ### 2026-11-02
 - Flag semantics fix: `check_update_available` is now repo-driven —
   device-only files (e.g. node-local `boot.py`, secrets) no longer set
@@ -528,8 +677,6 @@ Reused as-is: `node_listener`, `node_listener_port` (broadcast target),
   `testing/unit-test-idiom` updated after `/verify-standards`;
   device-only diff trap captured in `.ai/lessons.md`. Task 14
   (manual verification on node-north-001) remains open.
-
-## Changelog
 
 ### 2026-11-01
 - Spec-review pass: trigger now filters the diff to repo-side entries

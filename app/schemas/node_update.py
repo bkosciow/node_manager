@@ -34,6 +34,15 @@ class NodeUpdateCreate(BaseModel):
         return v
 
 
+class NodeUpdateFileResponse(BaseModel):
+    filename: str
+    status: str
+    fetched_at: datetime | None
+    validated_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
 class NodeUpdateResponse(BaseModel):
     id: int
     token: str
@@ -41,8 +50,7 @@ class NodeUpdateResponse(BaseModel):
     repository_id: int
     repo_type: str
     files: list[str]
-    fetched_files: list[str]
-    validated_files: list[str]
+    progress: list[NodeUpdateFileResponse]
     created_at: datetime
     updated_at: datetime
 

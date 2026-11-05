@@ -9,6 +9,7 @@ from app.models.device import Device
 from app.models.device_event import DeviceEvent
 from app.models.node_repository import NodeRepository
 from app.models.node_update import NodeUpdate
+from app.models.node_update_file import NodeUpdateFile
 from app.models.repository import Repository, RepositoryFile
 
 engine = create_engine(settings.database_url)

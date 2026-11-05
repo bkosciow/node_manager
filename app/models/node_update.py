@@ -17,6 +17,7 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.device import Device
+    from app.models.node_update_file import NodeUpdateFile
     from app.models.repository import Repository
 
 
@@ -33,12 +34,6 @@ class NodeUpdate(Base):
     )
     repo_type: Mapped[str] = mapped_column(String(50), nullable=False)
     files: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    fetched_files: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
-    validated_files: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
@@ -51,6 +46,12 @@ class NodeUpdate(Base):
     )
     repository: Mapped["Repository"] = relationship(  # noqa: F821
         "Repository", back_populates="updates"
+    )
+    progress: Mapped[list["NodeUpdateFile"]] = relationship(  # noqa: F821
+        "NodeUpdateFile",
+        back_populates="node_update",
+        cascade="all, delete-orphan",
+        order_by="NodeUpdateFile.filename",
     )
 
     __table_args__ = (

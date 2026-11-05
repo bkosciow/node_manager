@@ -3,7 +3,7 @@
 from datetime import datetime
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -17,6 +17,7 @@ from app.crud.node_update import (
 from app.db.base import Base
 from app.models.device import Device
 from app.models.node_update import NodeUpdate
+from app.models.node_update_file import NodeUpdateFile
 from app.models.repository import Repository
 from app.schemas.node_update import NodeUpdateCreate
 
@@ -81,6 +82,16 @@ def _create_session(
     )
 
 
+def _file_row(db_session: Session, session: NodeUpdate, filename: str):
+    """Fetch the session's progress row for a filename."""
+    return db_session.execute(
+        select(NodeUpdateFile).where(
+            NodeUpdateFile.node_update_id == session.id,
+            NodeUpdateFile.filename == filename,
+        )
+    ).scalar_one_or_none()
+
+
 class TestCreateNodeUpdate:
     def test_creates_session_with_fields(
         self, db_session: Session, sample_device, sample_repo
@@ -96,9 +107,29 @@ class TestCreateNodeUpdate:
         assert session.repository_id == sample_repo.id
         assert session.repo_type == "userspace"
         assert session.files == ["config.py"]
-        assert session.fetched_files == []
-        assert session.validated_files == []
+        row = _file_row(db_session, session, "config.py")
+        assert row is not None
+        assert row.status == "pending"
+        assert row.fetched_at is None
+        assert row.validated_at is None
         assert session.created_at is not None
+
+    def test_duplicate_filenames_deduped(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: repeated filenames in files -> one progress row (uq guard)."""
+        session = _create_session(
+            db_session, sample_device, sample_repo, files=["a.py", "a.py"]
+        )
+
+        rows = db_session.execute(
+            select(NodeUpdateFile).where(
+                NodeUpdateFile.node_update_id == session.id
+            )
+        ).scalars().all()
+
+        assert len(rows) == 1
+        assert rows[0].filename == "a.py"
 
     def test_duplicate_token_raises_integrity_error(
         self, db_session: Session, sample_device, sample_repo
@@ -175,27 +206,81 @@ class TestListNodeUpdates:
 
         assert list_node_updates(db_session, sample_device.id) == []
 
-
-class TestRecordFetchedFile:
-    def test_appends_filename(
+    def test_progress_eager_loaded_and_ordered(
         self, db_session: Session, sample_device, sample_repo
     ):
-        """AC: fetch hit appended to fetched_files."""
+        """AC: joinedload populates progress ordered by filename."""
+        _create_session(
+            db_session, sample_device, sample_repo,
+            token="prog", files=["b.py", "a.py"],
+        )
+
+        rows = list_node_updates(db_session, sample_device.id)
+
+        assert [f.filename for f in rows[0].progress] == ["a.py", "b.py"]
+        assert "progress" not in inspect(rows[0]).unloaded
+
+
+class TestRecordFetchedFile:
+    def test_fetch_advances_pending_row(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: fetch advances the progress row to fetched + timestamp."""
         session = _create_session(db_session, sample_device, sample_repo)
 
         recorded = record_fetched_file(db_session, session.token, "main.py")
 
         assert recorded is not None
-        assert session.fetched_files == ["main.py"]
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "fetched"
+        assert row.fetched_at is not None
 
-    def test_deduplicates(self, db_session: Session, sample_device, sample_repo):
-        """AC: same filename recorded twice -> single entry."""
+    def test_repeated_fetch_keeps_first_timestamp(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: second fetch is a no-op — first timestamp wins."""
         session = _create_session(db_session, sample_device, sample_repo)
 
         record_fetched_file(db_session, session.token, "main.py")
+        row = _file_row(db_session, session, "main.py")
+        sentinel = datetime(2020, 1, 1)
+        row.fetched_at = sentinel
+        db_session.commit()
+
         record_fetched_file(db_session, session.token, "main.py")
 
-        assert session.fetched_files == ["main.py"]
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "fetched"
+        assert row.fetched_at == sentinel
+
+    def test_fetch_after_validate_is_noop(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: a validated row is not demoted by a late fetch."""
+        session = _create_session(db_session, sample_device, sample_repo)
+
+        record_validated_file(db_session, session.token, "main.py")
+        record_fetched_file(db_session, session.token, "main.py")
+
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "validated"
+        assert row.fetched_at is None
+
+    def test_missing_row_inserts_fetched_row(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: legacy session without progress rows -> row is created."""
+        session = _create_session(db_session, sample_device, sample_repo)
+        row = _file_row(db_session, session, "main.py")
+        db_session.delete(row)
+        db_session.commit()
+
+        recorded = record_fetched_file(db_session, session.token, "main.py")
+
+        assert recorded is not None
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "fetched"
+        assert row.fetched_at is not None
 
     def test_unknown_token_returns_none(self, db_session: Session):
         """AC: unknown token -> None, no error."""
@@ -203,25 +288,51 @@ class TestRecordFetchedFile:
 
 
 class TestRecordValidatedFile:
-    def test_appends_filename(
+    def test_validate_advances_pending_row(
         self, db_session: Session, sample_device, sample_repo
     ):
-        """AC: validate hit appended to validated_files."""
+        """AC: validate advances to validated; no fetch -> fetched_at None."""
         session = _create_session(db_session, sample_device, sample_repo)
 
         recorded = record_validated_file(db_session, session.token, "main.py")
 
         assert recorded is not None
-        assert session.validated_files == ["main.py"]
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "validated"
+        assert row.validated_at is not None
+        assert row.fetched_at is None
 
-    def test_deduplicates(self, db_session: Session, sample_device, sample_repo):
-        """AC: same filename validated twice -> single entry."""
+    def test_repeated_validate_keeps_first_timestamp(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: second validation is a no-op — first timestamp wins."""
         session = _create_session(db_session, sample_device, sample_repo)
 
         record_validated_file(db_session, session.token, "main.py")
+        row = _file_row(db_session, session, "main.py")
+        sentinel = datetime(2020, 1, 1)
+        row.validated_at = sentinel
+        db_session.commit()
+
         record_validated_file(db_session, session.token, "main.py")
 
-        assert session.validated_files == ["main.py"]
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "validated"
+        assert row.validated_at == sentinel
+
+    def test_fetch_then_validate_sets_both_timestamps(
+        self, db_session: Session, sample_device, sample_repo
+    ):
+        """AC: fetch then validate -> both timestamps set, status validated."""
+        session = _create_session(db_session, sample_device, sample_repo)
+
+        record_fetched_file(db_session, session.token, "main.py")
+        record_validated_file(db_session, session.token, "main.py")
+
+        row = _file_row(db_session, session, "main.py")
+        assert row.status == "validated"
+        assert row.fetched_at is not None
+        assert row.validated_at is not None
 
     def test_unknown_token_returns_none(self, db_session: Session):
         """AC: unknown token -> None, no error."""

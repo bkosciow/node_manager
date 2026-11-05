@@ -1,11 +1,14 @@
 """Integration tests for the node update (upgrade) REST endpoints."""
 
+from sqlalchemy import select
+
 from app.config import settings
 from app.crud.device import create_device
 from app.crud.node_repository import assign_repo_to_node
 from app.crud.node_update import create_node_update, get_node_update_by_token
 from app.crud.repository import create_repository, upsert_repository_file
 from app.models.device_event import DeviceEvent
+from app.models.node_update_file import NodeUpdateFile
 from app.schemas.device import DeviceCreate
 from app.schemas.node_update import NodeUpdateCreate
 from app.schemas.repository import RepositoryCreate
@@ -78,6 +81,19 @@ def _trigger(device, client, monkeypatch) -> str:
     return resp.json()["token"]
 
 
+def _progress_row(test_db, token: str, filename: str):
+    """Fetch the session's NodeUpdateFile progress row for a filename."""
+    session = get_node_update_by_token(test_db, token)
+    if session is None:
+        return None
+    return test_db.execute(
+        select(NodeUpdateFile).where(
+            NodeUpdateFile.node_update_id == session.id,
+            NodeUpdateFile.filename == filename,
+        )
+    ).scalar_one_or_none()
+
+
 # -- POST /api/devices/{device_id}/update/{repo_type} ------------------------
 
 
@@ -114,8 +130,9 @@ class TestTriggerDeviceUpdate:
         session = get_node_update_by_token(test_db, token)
         assert session is not None
         assert session.files == ["config.py"]
-        assert session.fetched_files == []
-        assert session.validated_files == []
+        assert len(session.progress) == 1
+        assert session.progress[0].filename == "config.py"
+        assert session.progress[0].status == "pending"
 
     def test_invalid_repo_type_returns_400(self, client):
         """AC: repo_type outside VALID_REPO_TYPES -> 400."""
@@ -168,7 +185,7 @@ class TestServeUpgradeFile:
     def test_serves_file_and_records_fetch(
         self, client, test_db, monkeypatch, tmp_path
     ):
-        """AC: 200 file body, fetched_files recorded."""
+        """AC: 200 file body, progress row advanced to fetched."""
         device, _repo = _seed_upgrade_scenario(test_db)
         upgrade_dir = tmp_path / "node_north" / "_userspace"
         upgrade_dir.mkdir(parents=True)
@@ -181,8 +198,10 @@ class TestServeUpgradeFile:
         assert resp.status_code == 200
         assert b"print('new')" in resp.content
 
-        session = get_node_update_by_token(test_db, token)
-        assert session.fetched_files == ["config.py"]
+        row = _progress_row(test_db, token, "config.py")
+        assert row is not None
+        assert row.status == "fetched"
+        assert row.fetched_at is not None
 
     def test_unknown_token_returns_404(self, client):
         """AC: unknown token -> 404."""
@@ -264,8 +283,10 @@ class TestValidateUpgradeFile:
         assert resp.status_code == 200
         assert resp.json() == {"valid": True}
 
-        session = get_node_update_by_token(test_db, token)
-        assert session.validated_files == ["config.py"]
+        row = _progress_row(test_db, token, "config.py")
+        assert row is not None
+        assert row.status == "validated"
+        assert row.validated_at is not None
 
     def test_hash_mismatch_returns_400(self, client, test_db, monkeypatch):
         """AC: mismatch -> 400 with received/expected hashes."""
@@ -343,8 +364,45 @@ class TestListDeviceUpdates:
         assert resp.status_code == 200
         rows = resp.json()
         assert [r["token"] for r in rows] == [token2, token1]
-        assert all(r["fetched_files"] == [] for r in rows)
+        assert all(
+            r["progress"] == [
+                {
+                    "filename": "config.py",
+                    "status": "pending",
+                    "fetched_at": None,
+                    "validated_at": None,
+                }
+            ]
+            for r in rows
+        )
         assert all(r["repo_type"] == "userspace" for r in rows)
+
+    def test_full_lifecycle_shows_validated_progress(
+        self, client, test_db, monkeypatch, tmp_path
+    ):
+        """AC: get + validate advance the session's progress entry."""
+        device, _repo = _seed_upgrade_scenario(test_db)
+        upgrade_dir = tmp_path / "node_north" / "_userspace"
+        upgrade_dir.mkdir(parents=True)
+        (upgrade_dir / "config.py").write_text("print('new')\n")
+        monkeypatch.setattr(settings, "upgrades_dir", str(tmp_path))
+        token = _trigger(device, client, monkeypatch)
+
+        assert client.get(f"/api/update/{token}/get/config.py").status_code == 200
+        assert (
+            client.post(
+                f"/api/update/{token}/validate/config.py",
+                json={"hash": "b" * 64},
+            ).status_code
+            == 200
+        )
+
+        entry = client.get(f"/api/devices/{device.id}/updates").json()[0]
+        progress = entry["progress"][0]
+        assert progress["filename"] == "config.py"
+        assert progress["status"] == "validated"
+        assert progress["fetched_at"] is not None
+        assert progress["validated_at"] is not None
 
     def test_unknown_device_returns_404(self, client):
         """AC: missing device -> 404."""
