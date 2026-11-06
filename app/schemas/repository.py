@@ -27,6 +27,19 @@ class RepositoryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RepoRescanResponse(BaseModel):
+    """Report returned by POST /api/repos/{repo_id}/rescan."""
+
+    repo_name: str
+    repo_type: str
+    files_found: int
+    files_added: int
+    files_updated: int
+    files_unchanged: int
+    files_removed: int
+    errors: int
+
+
 class RepositoryCreate(BaseModel):
     name: str
     repo_type: str

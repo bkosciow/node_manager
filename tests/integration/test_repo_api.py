@@ -1,10 +1,17 @@
 """Integration tests for Repository and Assignment REST API endpoints."""
 
+import hashlib
+
+import pytest
+from sqlalchemy import func, select
+
+from app.config import settings
 from app.crud.device import create_device
 from app.crud.repository import (
     create_repository,
     upsert_repository_file,
 )
+from app.models.repository import RepositoryFile
 from app.schemas.device import DeviceCreate
 from app.schemas.repository import RepositoryCreate
 
@@ -164,3 +171,111 @@ class TestRepoAssignment:
             f"/api/nodes/{device.id}/repos", json={"repository_id": repo_us.id}
         )
         assert resp.status_code == 200
+
+
+# -- POST /api/repos/{repo_id}/rescan ----------------------------------------
+
+
+@pytest.fixture
+def upgrades_dir(tmp_path, monkeypatch):
+    """On-disk upgrades tree wired into settings.upgrades_dir."""
+    tree = tmp_path / "upgrades"
+    tree.mkdir()
+    monkeypatch.setattr(settings, "upgrades_dir", str(tree))
+    return tree
+
+
+class TestRepoRescan:
+    def test_missing_repo_returns_404(self, client):
+        """AC: no such repository -> 404 Repository not found."""
+        resp = client.post("/api/repos/9999/rescan")
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Repository not found"
+
+    def test_no_files_on_disk_returns_404_and_keeps_records(
+        self, client, test_db, upgrades_dir
+    ):
+        """AC: repo row exists but no files on disk -> 404, rows untouched."""
+        repo = create_repository(
+            test_db, RepositoryCreate(name="node_north", repo_type="userspace")
+        )
+        upsert_repository_file(test_db, repo.id, "main.py", "a" * 64)
+        test_db.commit()
+
+        resp = client.post(f"/api/repos/{repo.id}/rescan")
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == (
+            "No files found on disk for repository node_north (userspace)"
+        )
+
+        remaining = test_db.execute(
+            select(RepositoryFile).where(RepositoryFile.filename == "main.py")
+        ).scalars().all()
+        assert len(remaining) == 1  # no wipe
+
+    def test_happy_path_report_counts(self, client, test_db, upgrades_dir):
+        """AC: rescan syncs disk -> DB and reports per-run counts."""
+        type_dir = upgrades_dir / "node_north" / "_userspace"
+        type_dir.mkdir(parents=True)
+        (type_dir / "main.py").write_text("v1")
+        (type_dir / "util.py").write_text("util v1")
+
+        repo = create_repository(
+            test_db, RepositoryCreate(name="node_north", repo_type="userspace")
+        )
+        upsert_repository_file(test_db, repo.id, "main.py", "old-" + "a" * 60)
+        upsert_repository_file(test_db, repo.id, "stale.py", "b" * 64)
+        test_db.commit()
+
+        resp = client.post(f"/api/repos/{repo.id}/rescan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["repo_name"] == "node_north"
+        assert data["repo_type"] == "userspace"
+        assert data["files_found"] == 2
+        assert data["files_added"] == 1      # util.py
+        assert data["files_updated"] == 1     # main.py hash changed
+        assert data["files_unchanged"] == 0
+        assert data["files_removed"] == 1     # stale.py
+        assert data["errors"] == 0
+
+        # DB now mirrors disk with the fresh hash
+        main_row = (
+            test_db.execute(
+                select(RepositoryFile).where(RepositoryFile.filename == "main.py")
+            )
+            .scalars()
+            .one()
+        )
+        assert main_row.sha256 == hashlib.sha256(b"v1").hexdigest()
+        assert (
+            test_db.execute(
+                select(func.count())
+                .select_from(RepositoryFile)
+                .where(RepositoryFile.filename == "stale.py")
+            ).scalar()
+            == 0
+        )
+
+    def test_second_rescan_reports_unchanged(self, client, test_db, upgrades_dir):
+        """AC: rescan with no disk changes -> everything unchanged."""
+        type_dir = upgrades_dir / "node_north" / "_userspace"
+        type_dir.mkdir(parents=True)
+        (type_dir / "main.py").write_text("v1")
+
+        repo = create_repository(
+            test_db, RepositoryCreate(name="node_north", repo_type="userspace")
+        )
+        test_db.commit()
+
+        first = client.post(f"/api/repos/{repo.id}/rescan")
+        assert first.status_code == 200
+        assert first.json()["files_added"] == 1
+
+        second = client.post(f"/api/repos/{repo.id}/rescan")
+        data = second.json()
+        assert data["files_found"] == 1
+        assert data["files_unchanged"] == 1
+        assert data["files_added"] == 0
+        assert data["files_updated"] == 0
+        assert data["files_removed"] == 0

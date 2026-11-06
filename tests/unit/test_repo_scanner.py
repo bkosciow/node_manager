@@ -1,4 +1,4 @@
-"""Unit tests for repository scanner logic."""
+"""Unit tests for the shared repository scanner core (repo_scan service)."""
 
 import hashlib
 import os
@@ -7,9 +7,10 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.config import settings
 from app.db.base import Base
 from app.models.repository import Repository, RepositoryFile
-from repo_scanner import compute_sha256, discover_repos, sync_repo_to_db
+from app.services.repo_scan import compute_sha256, discover_repos, scan_repo
 
 
 @pytest.fixture
@@ -137,16 +138,14 @@ class TestDiscoverRepos:
         assert result["node_north"]["microplate"] == ["core.py"]
 
 
-class TestSyncRepoToDb:
+class TestScanRepo:
     def test_creates_repository_for_new_repo(
         self, db_session, upgrades_dir_with_repo, monkeypatch
     ):
         """AC: scanner creates Repository record for new repo."""
-        monkeypatch.setattr(
-            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
-        )
+        monkeypatch.setattr(settings, "upgrades_dir", str(upgrades_dir_with_repo))
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
 
@@ -158,11 +157,9 @@ class TestSyncRepoToDb:
     def test_upserts_new_files(self, db_session, upgrades_dir_with_repo,
                                monkeypatch):
         """AC: scanner upserts RepositoryFile records (new)."""
-        monkeypatch.setattr(
-            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
-        )
+        monkeypatch.setattr(settings, "upgrades_dir", str(upgrades_dir_with_repo))
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
 
@@ -180,11 +177,9 @@ class TestSyncRepoToDb:
     def test_upserts_updated_files(self, db_session, upgrades_dir_with_repo,
                                    monkeypatch):
         """AC: scanner upserts RepositoryFile records (updated hash)."""
-        monkeypatch.setattr(
-            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
-        )
+        monkeypatch.setattr(settings, "upgrades_dir", str(upgrades_dir_with_repo))
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
 
@@ -199,7 +194,7 @@ class TestSyncRepoToDb:
         (upgrades_dir_with_repo / "node_north" / "_microplate" / "core.py"
          ).write_text("print('world')")
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
 
@@ -217,17 +212,15 @@ class TestSyncRepoToDb:
         self, db_session, upgrades_dir_with_repo, monkeypatch
     ):
         """AC: scanner removes RepositoryFile records for deleted files."""
-        monkeypatch.setattr(
-            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
-        )
+        monkeypatch.setattr(settings, "upgrades_dir", str(upgrades_dir_with_repo))
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
         assert db_session.query(RepositoryFile).count() == 2
 
         # Simulate file deletion - only core.py remains
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py"]
         )
 
@@ -238,9 +231,7 @@ class TestSyncRepoToDb:
     def test_handles_unreadable_file(self, caplog, db_session,
                                      upgrades_dir_with_repo, monkeypatch):
         """AC: scanner handles unreadable file (logs error, continues)."""
-        monkeypatch.setattr(
-            "repo_scanner.UPGRADES_DIR", str(upgrades_dir_with_repo)
-        )
+        monkeypatch.setattr(settings, "upgrades_dir", str(upgrades_dir_with_repo))
 
         # Make utils.py unreadable
         utils_path = upgrades_dir_with_repo / "node_north" / "_microplate" \
@@ -250,7 +241,7 @@ class TestSyncRepoToDb:
         import logging
         caplog.set_level(logging.ERROR)
 
-        sync_repo_to_db(
+        scan_repo(
             db_session, "node_north", "microplate", ["core.py", "utils.py"]
         )
 

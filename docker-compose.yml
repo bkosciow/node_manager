@@ -24,6 +24,7 @@ services:
       - NODE_LISTENER=${NODE_LISTENER:-}
       - BASE_URL=${BASE_URL:-}
       - UPGRADES_DIR=${UPGRADES_DIR:-./upgrades}
+      - REPO_SCAN_INTERVAL_MINUTES=${REPO_SCAN_INTERVAL_MINUTES:-10}
     restart: unless-stopped
     deploy:
       resources:

@@ -46,9 +46,14 @@ from app.schemas.node_update import (
     NodeUpdateResponse,
     UpdateValidateRequest,
 )
-from app.schemas.repository import VALID_REPO_TYPES
+from app.schemas.repository import VALID_REPO_TYPES, RepoRescanResponse
 from app.services import comm
 from app.services.iot_bootstrap import bootstrap
+from app.services.repo_scan import (
+    list_repo_files_on_disk,
+    scan_repo,
+    start_auto_scan,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,6 +74,7 @@ def startup() -> None:
         )
     else:
         bootstrap()
+    start_auto_scan(settings.repo_scan_interval_minutes)
     logger.info("REST server startup complete")
 
 
@@ -282,6 +288,42 @@ def list_repos(
         }
         for repo in repos
     ]
+
+
+@app.post(
+    "/api/repos/{repo_id}/rescan",
+    response_model=RepoRescanResponse,
+    tags=["repos"],
+)
+def rescan_repository(
+    repo_id: int = Path(ge=1),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> dict:
+    """Re-hash this repo's on-disk files and sync the DB records."""
+    repo = get_repository(db, repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    filenames = list_repo_files_on_disk(repo.name, repo.repo_type)
+    if not filenames:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No files found on disk for repository "
+                f"{repo.name} ({repo.repo_type})"
+            ),
+        )
+    report = scan_repo(db, repo.name, repo.repo_type, filenames)
+    return {
+        "repo_name": report.repo_name,
+        "repo_type": report.repo_type,
+        "files_found": report.files_found,
+        "files_added": report.files_added,
+        "files_updated": report.files_updated,
+        "files_unchanged": report.files_unchanged,
+        "files_removed": report.files_removed,
+        "errors": report.errors,
+    }
 
 
 # -- Assignment endpoints ----------------------------------------------------

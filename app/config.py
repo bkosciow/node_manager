@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     node_listener: str = ""
     node_listener_port: int = 5053
     upgrades_dir: str = "./upgrades"
+    repo_scan_interval_minutes: int = 10
     base_url: str = ""
     sl_statisiv: str = ""
     sl_ivkey: str = ""
