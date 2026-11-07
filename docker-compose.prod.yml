@@ -25,8 +25,12 @@ services:
       - SL_PASSPHRASE=${SL_PASSPHRASE:-}
       - NODE_LISTENER=${NODE_LISTENER:-}
       - BASE_URL=${BASE_URL:-}
-      - UPGRADES_DIR=${UPGRADES_DIR:-./upgrades}
+      - UPGRADES_DIR=/app/upgrades
       - REPO_SCAN_INTERVAL_MINUTES=${REPO_SCAN_INTERVAL_MINUTES:-10}
+    volumes:
+      # Host upgrades dir (external repos) bind-mounted read-only;
+      # host path configurable via UPGRADES_DIR in .env, default ./upgrades.
+      - ${UPGRADES_DIR:-./upgrades}:/app/upgrades:ro
     restart: unless-stopped
     deploy:
       resources:
