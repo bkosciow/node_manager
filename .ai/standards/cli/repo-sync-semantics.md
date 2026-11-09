@@ -17,5 +17,5 @@
 - Scan core lives in `app/services/repo_scan.py` (shared by the API and
   the CLI) and is all `select()`-style. The legacy
   `db.query(Repository)` from the old `sync_repo_to_db` was removed in
-  SPEC-002; a 4-arg legacy alias with the old signature remains in
+  SPEC-004; a 4-arg legacy alias with the old signature remains in
   `repo_scanner.py` for import compatibility.

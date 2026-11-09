@@ -4,7 +4,7 @@
   `./upgrades`), read at call time in `app/services/repo_scan.py` — the
   shared scan core used by the API auto-scanner and the thin CLI
   `repo_scanner.py` (separate Docker container with a `/upgrades` volume
-  mapping; the old `UPGRADES_DIR` module constant was removed in SPEC-002).
+  mapping; the old `UPGRADES_DIR` module constant was removed in SPEC-004).
 - Layout: `<upgrades_dir>/<repo_name>/{_microplate,_userspace}/<file>`.
 - `REPO_TYPE_MAP` maps underscore-prefixed dir names to repo types:
   `{"_microplate": "microplate", "_userspace": "userspace"}`;

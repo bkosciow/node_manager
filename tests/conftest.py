@@ -11,7 +11,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.rest_server import app
 
-# Auto-scan guard (SPEC-002): TestClient's lifespan runs startup() on every
+# Auto-scan guard (SPEC-004): TestClient's lifespan runs startup() on every
 # test; forcing the interval to 0 keeps start_auto_scan() on its no-op path,
 # so no daemon thread ever spawns under pytest (a spawned thread would hit
 # the app's real engine instead of the test SQLite).
