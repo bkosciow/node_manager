@@ -1,4 +1,4 @@
-# SPEC-002 — Repository Rescan & Auto-Scanner
+# SPEC-004 — Repository Rescan & Auto-Scanner
 
 ## Overview
 

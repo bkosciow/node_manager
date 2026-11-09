@@ -1,4 +1,4 @@
-# SPEC-001 — Node Update Process
+# SPEC-003 — Node Update Process
 
 ## Overview
 
