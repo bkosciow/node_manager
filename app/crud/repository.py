@@ -1,11 +1,10 @@
 """CRUD operations for Repository and RepositoryFile models."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.repository import Repository, RepositoryFile
 from app.schemas.repository import RepositoryCreate
+from app.utils import utcnow
 
 
 def get_repository(db: Session, repo_id: int) -> Repository | None:
@@ -49,7 +48,7 @@ def upsert_repository_file(
     )
     if existing is not None:
         existing.sha256 = sha256
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utcnow()
         db.commit()
         db.refresh(existing)
         return existing

@@ -6,14 +6,13 @@ Progress rows (``NodeUpdateFile``) advance monotonically:
 calls are no-ops.
 """
 
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.node_update import NodeUpdate
 from app.models.node_update_file import NodeUpdateFile
 from app.schemas.node_update import NodeUpdateCreate
+from app.utils import utcnow
 
 
 def create_node_update(db: Session, data: NodeUpdateCreate) -> NodeUpdate:
@@ -79,7 +78,7 @@ def record_fetched_file(
                 node_update_id=obj.id,
                 filename=filename,
                 status="fetched",
-                fetched_at=datetime.utcnow(),
+                fetched_at=utcnow(),
             )
         )
         db.commit()
@@ -87,7 +86,7 @@ def record_fetched_file(
         return obj
     if row.status == "pending":
         row.status = "fetched"
-        row.fetched_at = datetime.utcnow()
+        row.fetched_at = utcnow()
         db.commit()
         db.refresh(obj)
     return obj
@@ -118,7 +117,7 @@ def record_validated_file(
                 node_update_id=obj.id,
                 filename=filename,
                 status="validated",
-                validated_at=datetime.utcnow(),
+                validated_at=utcnow(),
             )
         )
         db.commit()
@@ -126,7 +125,7 @@ def record_validated_file(
         return obj
     if row.status != "validated":
         row.status = "validated"
-        row.validated_at = datetime.utcnow()
+        row.validated_at = utcnow()
         db.commit()
         db.refresh(obj)
     return obj

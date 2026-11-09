@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -24,7 +25,7 @@ class DeviceIgnoredFile(Base):
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     ignored_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     device: Mapped["Device"] = relationship(

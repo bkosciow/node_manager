@@ -1,13 +1,13 @@
 """CRUD operations for the DeviceEvent model."""
 
 import logging
-from datetime import datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.device import Device
 from app.models.device_event import DeviceEvent
+from app.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def upsert_event(
     Single-threaded worker — no race condition between check and write.
     DB unique constraint on (device_id, event_type) is the final guard.
     """
-    now = datetime.utcnow()
+    now = utcnow()
     existing = get_event(db, device_id, event_type)
     if existing is not None:
         existing.parameters = parameters

@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 
 class NodeRepository(Base):
@@ -21,7 +22,7 @@ class NodeRepository(Base):
     )
     repo_type: Mapped[str] = mapped_column(String(50), nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     device: Mapped["Device"] = relationship(  # noqa: F821

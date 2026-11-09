@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.device_event import DeviceEvent
@@ -21,7 +22,7 @@ class Device(Base):
     chip_id: Mapped[str] = mapped_column(String(255), nullable=False)
     node: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     events: Mapped[list["DeviceEvent"]] = relationship(

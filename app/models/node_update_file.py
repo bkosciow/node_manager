@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.node_update import NodeUpdate
@@ -26,10 +27,10 @@ class NodeUpdateFile(Base):
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
     node_update: Mapped["NodeUpdate"] = relationship(  # noqa: F821

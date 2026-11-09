@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, UniqueConstr
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 
 class DeviceEvent(Base):
@@ -18,7 +19,7 @@ class DeviceEvent(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     parameters: Mapped[dict] = mapped_column(JSON, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     device: Mapped["Device"] = relationship(  # noqa: F821

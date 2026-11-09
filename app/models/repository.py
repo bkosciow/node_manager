@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.node_update import NodeUpdate
@@ -19,7 +20,7 @@ class Repository(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     repo_type: Mapped[str] = mapped_column(String(50), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     files: Mapped[list["RepositoryFile"]] = relationship(
@@ -47,7 +48,7 @@ class RepositoryFile(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
 
     repository: Mapped["Repository"] = relationship(

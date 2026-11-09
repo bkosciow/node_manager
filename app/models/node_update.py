@@ -14,6 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.device import Device
@@ -35,10 +36,10 @@ class NodeUpdate(Base):
     repo_type: Mapped[str] = mapped_column(String(50), nullable=False)
     files: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow
+        DateTime, default=utcnow
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utcnow, onupdate=utcnow
     )
 
     device: Mapped["Device"] = relationship(  # noqa: F821
