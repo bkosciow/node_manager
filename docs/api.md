@@ -137,6 +137,73 @@ Get parameters for a specific event type.
 
 ---
 
+## Device Active Query
+
+Actively ask a device for fresh data. The node's replies (`system.pong`,
+`system.microplate.hash`, `system.userspace.hash`) are ingested by the UDP
+listener and persisted as `DeviceEvent` rows; both routes require `NODE_LISTENER`
+to be configured and broadcast to `NODE_LISTENER:5053`.
+
+### POST /api/devices/{device_id}/ping
+
+Broadcast a `system.ping` message. The node replies with `system.pong`,
+which the listener uses to refresh the device's `last_seen_at`.
+
+**Path Parameters**:
+
+| Param | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `device_id` | int | `>= 1` | Device ID |
+
+**Response** (202):
+
+```json
+{
+  "message": "Ping broadcast sent",
+  "event": "system.ping",
+  "target": "sensor-1"
+}
+```
+
+**Errors**:
+
+- `404` — Device not found
+- `503` — Node listener not configured
+
+---
+
+### POST /api/devices/{device_id}/rescan/{repo_type}
+
+Broadcast a `system.{repo_type}.get_hash` message so the device re-hashes
+its local files and reports `system.{repo_type}.hash`. Works with or without
+a repository of that type assigned to the device — the node simply reports
+what it has.
+
+**Path Parameters**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `device_id` | int | Device ID |
+| `repo_type` | string | `microplate` or `userspace` |
+
+**Response** (202):
+
+```json
+{
+  "message": "Rescan broadcast sent",
+  "event": "system.userspace.get_hash",
+  "target": "sensor-1"
+}
+```
+
+**Errors**:
+
+- `400` — Invalid repository type
+- `404` — Device not found
+- `503` — Node listener not configured
+
+---
+
 ## Repositories
 
 ### GET /api/repos

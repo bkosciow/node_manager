@@ -125,6 +125,8 @@ See `.env.example` for all options.
 | DELETE | `/api/devices/{id}/ignored-files` | Remove an ignored file (`repo_type` + `filename` query params) |
 | GET | `/api/devices/{id}/updates` | List upgrade sessions for a device (newest first) |
 | POST | `/api/devices/{id}/update/{repo_type}` | Broadcast an upgrade for the repo-side diff (202) |
+| POST | `/api/devices/{id}/ping` | Broadcast a liveness ping to the device (202) |
+| POST | `/api/devices/{id}/rescan/{repo_type}` | Ask the device to re-report its file hashes for the repo type (202) |
 | GET | `/api/repos?type={repo_type}` | List repositories of a type with their files and hashes |
 | POST | `/api/repos/{id}/rescan` | Re-hash this repo's on-disk files and sync the DB records |
 | POST | `/api/nodes/{device_id}/repos` | Assign a repository to a node |

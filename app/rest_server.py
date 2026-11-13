@@ -547,6 +547,70 @@ def list_device_updates(
     return list_node_updates(db, device_id)
 
 
+# -- Device active query endpoints --------------------------------------------
+
+
+@app.post(
+    "/api/devices/{device_id}/ping",
+    status_code=202,
+    tags=["device-queries"],
+)
+def ping_device(
+    device_id: int = Path(ge=1),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> dict:
+    """Broadcast a system.ping message; the node replies with system.pong."""
+    device = get_device(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if not settings.node_listener:
+        raise HTTPException(
+            status_code=503, detail="Node listener not configured"
+        )
+
+    comm.send({"event": "system.ping", "targets": [device.node]})
+    return {
+        "message": "Ping broadcast sent",
+        "event": "system.ping",
+        "target": device.node,
+    }
+
+
+@app.post(
+    "/api/devices/{device_id}/rescan/{repo_type}",
+    status_code=202,
+    tags=["device-queries"],
+)
+def rescan_device(
+    device_id: int = Path(ge=1),
+    repo_type: str = Path(),
+    db: Session = Depends(get_db),
+    token: str = Depends(verify_token),
+) -> dict:
+    """Broadcast a system.{repo_type}.get_hash message for a fresh hash report."""
+    if repo_type not in VALID_REPO_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid repository type")
+
+    device = get_device(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    if not settings.node_listener:
+        raise HTTPException(
+            status_code=503, detail="Node listener not configured"
+        )
+
+    event = f"system.{repo_type}.get_hash"
+    comm.send({"event": event, "targets": [device.node]})
+    return {
+        "message": "Rescan broadcast sent",
+        "event": event,
+        "target": device.node,
+    }
+
+
 # -- Entry point -------------------------------------------------------------
 
 if __name__ == "__main__":
