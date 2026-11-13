@@ -11,6 +11,13 @@
 - `run_migrations()` (`app/db/migrate.py`) runs `alembic upgrade head`
   in-process, anchored to the repo root via
   `Path(__file__).resolve().parents[2]` so it is CWD-independent.
+- `run_migrations()` takes a named MySQL advisory lock
+  (`GET_LOCK 'node_manager_alembic'`, 120 s timeout) so concurrent
+  in-process upgrades across containers are serialized: when the api and
+  scanner start at once, the second blocks until the first finishes, then
+  finds the schema already at head (a clean no-op) instead of racing on
+  `CREATE TABLE`. The lock only engages on a MySQL URL — it is skipped for
+  the single-process SQLite test DB.
 - Every entrypoint calls `run_migrations()` at startup, before touching the
   DB: `rest_server.startup()`, `device_scaner.main()`,
   `repo_scanner.main()`, and `scripts/backfill_node_update_files.py`.

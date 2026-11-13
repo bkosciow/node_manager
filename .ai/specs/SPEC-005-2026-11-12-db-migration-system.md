@@ -365,6 +365,19 @@ a quick manual task). No in-place truncate/reset variant.
 
 ## Changelog
 
+### 2026-11-13
+- Hardened `run_migrations()` against the concurrent-startup race: a named
+  MySQL advisory lock (`GET_LOCK 'node_manager_alembic'`, 120 s timeout)
+  now serializes simultaneous in-process `upgrade head` runs across
+  containers, so the api + scanner no longer race on `CREATE TABLE` at a
+  cold start (the loser previously crashed + restarted). The lock is
+  MySQL-only — skipped on the single-process SQLite test DB. Two new unit
+  tests in `tests/unit/test_migrate.py` verify the lock ordering. Suite
+  green (262 passed, flake8 = 0).
+- Noted in prod cutover (2026-11-13): the Qwen shell's exported dev
+  `DATABASE_URL` shadowed the prod `.env` during `docker compose`, so the
+  first recreate pointed at the dev DB; fixed by unsetting the shell vars.
+
 ### 2026-11-12
 - Implemented T1–T10; suite green (260 passed, flake8 = 0) and live
   verified (T8). Key decisions:
