@@ -5,10 +5,13 @@ services:
       dockerfile: Dockerfile
       target: runner
     network_mode: host
+    # Dockerfile CMD hard-codes --port 9092; override so dev runs on 9093 and
+    # prod can own 9092 (SPEC-005 verification).
+    command: ["python", "-m", "uvicorn", "app.rest_server:app", "--host", "0.0.0.0", "--port", "9093"]
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - APP_HOST=0.0.0.0
-      - APP_PORT=9092
+      - APP_PORT=9093
       - API_TOKEN=${API_TOKEN:-}
       - APPRISE_URL=${APPRISE_URL:-}
       - APPRISE_TAG=${APPRISE_TAG:-}
@@ -32,7 +35,7 @@ services:
           cpus: "1"
           memory: 512M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9092/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9093/health"]
       interval: 15s
       timeout: 3s
       start_period: 5s
@@ -49,7 +52,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - APP_HOST=0.0.0.0
-      - APP_PORT=9092
+      - APP_PORT=9093
       - API_TOKEN=${API_TOKEN:-}
       - APPRISE_URL=${APPRISE_URL:-}
       - APPRISE_TAG=${APPRISE_TAG:-}
