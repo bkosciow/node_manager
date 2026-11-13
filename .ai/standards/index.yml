@@ -4,6 +4,8 @@
 api:
   auth:
     description: Auth middleware, token verification, public endpoint exceptions
+  broadcast-trigger-routes:
+    description: "202 UDP-broadcast routes: 400 input -> 404 resource -> 503 listener guard -> comm.send, hand-built dict"
   error-responses:
     description: HTTPException with detail strings, status code conventions
   response-format:
@@ -53,7 +55,7 @@ messaging:
 
 testing:
   integration-fixtures:
-    description: "file-based SQLite (TestClient thread), client/test_db fixtures, SAMPLE_DEVICE_*, auth-off"
+    description: "file-based SQLite (TestClient thread), client/test_db fixtures, SAMPLE_DEVICE_*, auth-off; broadcast routes: comm.send capture via monkeypatch"
   message-handler-tests:
     description: "MagicMock().data + queue asserts, lambda _process dispatch, file-based db_env for DB paths"
   unit-test-idiom:
