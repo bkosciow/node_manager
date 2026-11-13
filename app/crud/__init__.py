@@ -3,6 +3,8 @@ from app.crud.device import (
     get_device,
     get_device_by_pair,
     get_devices,
+    touch_last_seen,
+    touch_last_updated,
 )
 from app.crud.device_event import (
     get_event,
@@ -43,6 +45,8 @@ __all__ = [
     "get_device",
     "get_device_by_pair",
     "get_devices",
+    "touch_last_seen",
+    "touch_last_updated",
     "get_event",
     "get_events",
     "get_or_create_device",

@@ -11,6 +11,8 @@ from app.crud.device import (
     get_device,
     get_device_by_pair,
     get_devices,
+    touch_last_seen,
+    touch_last_updated,
 )
 from app.models.device import Device  # noqa: F401 — register model with Base
 from app.schemas.device import DeviceCreate
@@ -49,6 +51,8 @@ class TestCreateDevice:
         assert dev.chip_id == "ABC123"
         assert dev.node == "s1"
         assert dev.created_at is not None
+        assert dev.last_seen_at is not None
+        assert dev.last_updated_at is None
 
 
 # -- get_device --------------------------------------------------------------
@@ -113,3 +117,41 @@ class TestUniqueConstraint:
         create_device(db, DeviceCreate(chip_id="ABC123", node="s1"))
         with pytest.raises(IntegrityError):
             create_device(db, DeviceCreate(chip_id="ABC123", node="s1"))
+
+
+# -- touch_last_seen ---------------------------------------------------------
+
+
+class TestTouchLastSeen:
+    def test_refreshes_existing_pair(self):
+        db = next(_session())
+        dev = create_device(db, DeviceCreate(chip_id="ABC123", node="s1"))
+        before = dev.last_seen_at
+        assert before is not None
+
+        touch_last_seen(db, "ABC123", "s1")
+        found = get_device_by_pair(db, "ABC123", "s1")
+        assert found.last_seen_at >= before
+
+    def test_unknown_pair_is_noop(self):
+        db = next(_session())
+        touch_last_seen(db, "ZZZZ", "s9")
+        assert get_device_by_pair(db, "ZZZZ", "s9") is None
+
+
+# -- touch_last_updated ------------------------------------------------------
+
+
+class TestTouchLastUpdated:
+    def test_sets_last_updated_at(self):
+        db = next(_session())
+        dev = create_device(db, DeviceCreate(chip_id="ABC123", node="s1"))
+        assert dev.last_updated_at is None
+
+        touch_last_updated(db, dev.id)
+        found = get_device(db, dev.id)
+        assert found.last_updated_at is not None
+
+    def test_missing_device_is_noop(self):
+        db = next(_session())
+        touch_last_updated(db, 9999)

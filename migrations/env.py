@@ -25,9 +25,11 @@ import app.models
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# disable_existing_loggers=False keeps uvicorn/app loggers alive —
+# run_migrations() runs in-process at app startup (SPEC-005), so a fresh
+# fileConfig must not disable the loggers the running app already uses.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Model MetaData for 'autogenerate' support — diffs models vs live schema.
 target_metadata = Base.metadata

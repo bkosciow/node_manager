@@ -1,5 +1,6 @@
 .PHONY: dev dev-build dev-down test test-unit test-integration lint clean help \
-        build-prod prod-up prod-down prod-logs prod-build
+        build-prod prod-up prod-down prod-logs prod-build \
+        migrate autogenerate reset-dev-db
 
 # ===========================================
 # Development
@@ -43,6 +44,32 @@ lint: ## Run linter
 
 db-shell: ## Connect to MySQL shell
 	docker compose exec db mysql -unode_manager -ppostgres node_manager_dev
+
+migrate: ## Apply pending migrations (alembic upgrade head)
+	.venv/bin/alembic upgrade head
+
+autogenerate: ## Generate a revision (usage: make autogenerate MSG=<slug>)
+	$(if $(MSG),,$(error MSG is required -- usage: make autogenerate MSG=<slug>))
+	.venv/bin/alembic revision --autogenerate -m "$(MSG)"
+
+# Read DATABASE_URL from the repo .env (Make does not load .env itself);
+# used only for the dev-only guard below.
+DATABASE_URL := $(shell sed -n 's/^DATABASE_URL=//p' .env 2>/dev/null)
+
+reset-dev-db: ## Dev-only: drop/create node_manager_dev + apply migrations
+	$(if $(DATABASE_URL),,$(error .env DATABASE_URL not found -- create .env (see .env.example) first))
+	@case "$(DATABASE_URL)" in *node_manager_dev*) : ;; *) echo "error: reset-dev-db is dev-only: DATABASE_URL must target node_manager_dev"; exit 1 ;; esac
+	@if ! ls migrations/versions/*.py >/dev/null 2>&1; then \
+	echo 'error: no revisions in migrations/versions/ -- generate the baseline first:'; \
+	echo '  1) docker compose exec db mysql -uroot -ppostgres -e "DROP DATABASE IF EXISTS node_manager_dev; CREATE DATABASE node_manager_dev"'; \
+	echo '  2) .venv/bin/alembic revision --autogenerate -m baseline'; \
+	echo '     then rename to 0001_baseline.py (revision = "0001", down_revision = None), commit, and re-run'; \
+	exit 1; fi
+	@echo '==> dropping and creating node_manager_dev'
+	docker compose exec db mysql -uroot -ppostgres -e "DROP DATABASE IF EXISTS node_manager_dev; CREATE DATABASE node_manager_dev"
+	@echo '==> applying migrations (alembic upgrade head)'
+	.venv/bin/alembic upgrade head
+	@echo 'done -- re-assign repos to nodes, then run: make dev-repo-scanner'
 
 # ===========================================
 # Production

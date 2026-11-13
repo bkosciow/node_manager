@@ -24,6 +24,8 @@ cli:
 database:
   event-hash-diff:
     description: system.{repo_type}.hash event types, hash diff rules, hardcoded repo-type trap
+  migrations:
+    description: "Alembic revision history under migrations/versions, 4-digit ids, run_migrations() in-process at every entrypoint, tests stay migration-independent"
   none-integrity-contract:
     description: "None → 404 / IntegrityError → 409 contract, get-or-create rollback fallback"
   query-style:

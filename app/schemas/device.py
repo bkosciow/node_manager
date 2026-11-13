@@ -29,6 +29,8 @@ class DeviceResponse(BaseModel):
     chip_id: str
     node: str
     created_at: datetime
+    last_seen_at: datetime
+    last_updated_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -43,6 +45,8 @@ class DeviceWithUpdates(BaseModel):
     chip_id: str
     node: str
     created_at: datetime
+    last_seen_at: datetime
+    last_updated_at: datetime | None
     updates_available: UpdatesAvailable
 
     model_config = {"from_attributes": True}

@@ -8,6 +8,7 @@ from iot_message.message import Message
 from iot_message.cryptor.aes_sha1 import Cryptor as AESSHA1Cryptor
 
 from app.config import settings
+from app.db.migrate import run_migrations
 from app.message_handler.device_discovery import MessageHandler
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,9 @@ def _shutdown(signum: int, frame: object) -> None:
 
 def main() -> None:
     global _server
+
+    # Schema must exist before the worker writes via SessionLocal (SPEC-005).
+    run_migrations()
 
     if settings.sl_passphrase:
         cryptor = AESSHA1Cryptor(

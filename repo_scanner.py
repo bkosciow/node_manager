@@ -3,8 +3,8 @@
 Thin wrapper around the shared scan core in
 ``app/services/repo_scan.py`` (also used by the REST API's force-rescan
 endpoint and the in-app auto-scanner). Keeps the standalone DB bootstrap:
-own engine + ``create_all`` + one session for the whole run (the
-standalone-db-bootstrap standard).
+own engine + ``run_migrations()`` + one session for the whole run (the
+standalone-db-bootstrap standard, updated by SPEC-005).
 
 Runs as a separate Docker container with a /upgrades volume mapping.
 """
@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
-from app.db.base import Base
+from app.db.migrate import run_migrations
 from app.services.repo_scan import (
     compute_sha256,
     discover_repos,
@@ -52,9 +52,10 @@ def main() -> None:
 
     logger.info("Starting repository scan of %s", settings.upgrades_dir)
 
-    # Standalone bootstrap: own engine + schema, one session for the run.
+    # Standalone bootstrap: own engine, one session for the run; schema via
+    # Alembic (SPEC-005 — create_all retired from app code paths).
     engine = create_engine(settings.database_url)
-    Base.metadata.create_all(bind=engine)
+    run_migrations()
     session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     db = session_local()

@@ -58,6 +58,26 @@ make test-coverage         # Tests with coverage report
 make lint                  # Run flake8
 ```
 
+## Database Migrations
+
+The schema is versioned with [Alembic](https://alembic.sqlalchemy.org/).
+Revisions live under `migrations/versions/` (`0001` baseline + later
+revisions). `app/db/migrate.py` runs `alembic upgrade head` in-process, so
+the API, scanner, and repo scanner apply any pending migration at startup —
+in the normal flow there is nothing to run by hand.
+
+Manual / development commands (see `Makefile`):
+
+| Action | Command |
+|--------|---------|
+| Apply pending migrations | `make migrate` |
+| Generate a revision from model changes | `make autogenerate MSG=<slug>` |
+| Reset the dev DB (drop/create + migrate) | `make reset-dev-db` |
+
+`reset-dev-db` is dev-only — it refuses to run against a non-dev
+`DATABASE_URL`. Production schema changes ship as new revision files and are
+applied automatically on container start.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |

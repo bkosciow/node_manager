@@ -28,7 +28,8 @@ from app.crud.device_ignored_file import (
     delete_ignored_file,
     get_ignored_files,
 )
-from app.db.session import get_db, init_db
+from app.db.migrate import run_migrations
+from app.db.session import get_db
 from app.models.device_ignored_file import DeviceIgnoredFile
 from app.models.repository import RepositoryFile
 from app.schemas.device import DeviceWithUpdates, UpdatesAvailable
@@ -67,7 +68,7 @@ app = FastAPI(
 
 @app.on_event("startup")
 def startup() -> None:
-    init_db()
+    run_migrations()
     if settings.node_listener:
         bootstrap(
             send_to=(settings.node_listener, int(settings.node_listener_port))
@@ -100,6 +101,8 @@ def list_devices(
             chip_id=device.chip_id,
             node=device.node,
             created_at=device.created_at,
+            last_seen_at=device.last_seen_at,
+            last_updated_at=device.last_updated_at,
             updates_available=UpdatesAvailable(**get_device_updates(db, device.id)),
         )
         for device in devices
@@ -123,6 +126,11 @@ def get_single_device(
         "chip_id": device.chip_id,
         "node": device.node,
         "created_at": device.created_at.isoformat(),
+        "last_seen_at": device.last_seen_at.isoformat(),
+        "last_updated_at": (
+            device.last_updated_at.isoformat() if device.last_updated_at
+            else None
+        ),
         "events": {e.event_type: e.parameters for e in events},
         "assigned_repos": [
             {

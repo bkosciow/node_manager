@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.db.base import Base
 from app.db.session import get_db
+import app.rest_server as rest_server
 from app.rest_server import app
 
 # Auto-scan guard (SPEC-004): TestClient's lifespan runs startup() on every
@@ -35,6 +36,18 @@ def override_get_db():
         yield db
     finally:
         db.close()
+
+
+@pytest.fixture(autouse=True)
+def _no_db_migrations(monkeypatch):
+    """Keep TestClient's lifespan startup() off Alembic / the real DB.
+
+    startup() calls run_migrations() (SPEC-005) — the name bound in the
+    rest_server module namespace. No-op it so the suite stays
+    migration-independent: the test engine's own create_all above is what
+    serves the tests, never Alembic.
+    """
+    monkeypatch.setattr(rest_server, "run_migrations", lambda: None)
 
 
 @pytest.fixture(scope="function")

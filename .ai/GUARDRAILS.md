@@ -121,15 +121,22 @@ have been exported".
 
 ## Architectural decisions
 
-### Schema = models, no migration tool
-- **Choice**: schema is defined entirely by the SQLAlchemy models in
-  `app/models/`; `init_db()` runs `Base.metadata.create_all()`
-  (`app/db/session.py`). No migration framework (no Alembic in
-  `requirements.txt`). `upgrades/` is a reserved slot for one-off scripts
-  (currently empty).
-- **Why**: schema follows the models; no versioned-migration tooling exists.
-- **Consequence**: schema changes = edit the model; never add migration files
-  or "add" Alembic without changing this decision.
+### Schema = versioned Alembic migrations (SPEC-005)
+- **Choice**: schema is versioned by Alembic. Revisions live under
+  `migrations/versions/` (sequential 4-digit ids; `0001` baseline).
+  `run_migrations()` (`app/db/migrate.py`) runs `alembic upgrade head`
+  in-process, and every entrypoint (api, scanner, repo scanner, backfill
+  script) calls it at startup. `init_db()` / `create_all` is retired from app
+  code paths.
+- **Why**: reproducible, reviewable, versioned schema history — a fresh or
+  stale DB converges to head automatically on start; existing-DB column
+  changes ship as revisions instead of manual `ALTER` (supersedes the
+  quick-002 manual-ALTER path).
+- **Consequence**: a schema change = edit the model, then `make autogenerate
+  MSG=<slug>` (rename to the next 4-digit id, set `down_revision`) +
+  `make migrate`; never hand-edit an applied revision; never reintroduce
+  `create_all` into app code paths. `upgrades/` remains node-repository data
+  (hashed/served), NOT a migration or SQL-script location.
 
 ### Mixed query styles: 2.0 models + legacy CRUD
 - **Choice**: models use SQLAlchemy 2.0 style (`Mapped[]` +

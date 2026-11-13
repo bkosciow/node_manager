@@ -1,6 +1,6 @@
 """Integration tests for REST API endpoints."""
 
-from app.crud.device import create_device
+from app.crud.device import create_device, touch_last_updated
 from app.schemas.device import DeviceCreate
 
 from tests.conftest import SAMPLE_DEVICE_1, SAMPLE_DEVICE_2, SAMPLE_DEVICE_3
@@ -29,6 +29,31 @@ class TestListDevices:
             assert "chip_id" in dev
             assert "node" in dev
             assert "created_at" in dev
+            assert "last_seen_at" in dev
+            assert "last_updated_at" in dev
+
+    def test_last_updated_at_is_none_before_event(self, client, test_db):
+        create_device(test_db, DeviceCreate(**SAMPLE_DEVICE_1))
+        test_db.commit()
+
+        resp = client.get("/api/devices")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["last_seen_at"] is not None
+        assert data[0]["last_updated_at"] is None
+
+    def test_last_updated_at_set_after_touch(self, client, test_db):
+        dev = create_device(test_db, DeviceCreate(**SAMPLE_DEVICE_1))
+        test_db.commit()
+
+        touch_last_updated(test_db, dev.id)
+        test_db.commit()
+
+        resp = client.get("/api/devices")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data[0]["last_updated_at"] is not None
 
     def test_pagination_skip_and_limit(self, client, test_db):
         for d in [SAMPLE_DEVICE_1, SAMPLE_DEVICE_2, SAMPLE_DEVICE_3]:
@@ -66,6 +91,9 @@ class TestGetSingleDevice:
         data = resp.json()
         assert data["chip_id"] == SAMPLE_DEVICE_1["chip_id"]
         assert data["node"] == SAMPLE_DEVICE_1["node"]
+        assert "last_seen_at" in data
+        assert "last_updated_at" in data
+        assert data["last_updated_at"] is None
         assert "events" in data
         assert data["events"] == {}
 

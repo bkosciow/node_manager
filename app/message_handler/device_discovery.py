@@ -121,21 +121,27 @@ class MessageHandler(Handler):
     def _process(
         self, chip_id: str, node: str, session_factory: "SessionLocal",
     ) -> None:
-        """Deduplicate and persist a single (chip_id, node) pair."""
-        from app.crud.device import create_device, get_device_by_pair
+        """Deduplicate a (chip_id, node) pair and refresh last_seen_at."""
+        from app.crud.device import (
+            create_device,
+            get_device_by_pair,
+            touch_last_seen,
+        )
         from app.schemas.device import DeviceCreate
         from sqlalchemy.exc import IntegrityError
 
         pair = (chip_id, node)
-
-        # Fast-path: in-memory cache.
-        if pair in self.cache:
-            return
-
         db = session_factory()
         try:
+            # Fast-path: in-memory cache. Refresh last_seen_at without
+            # the dedupe lookup.
+            if pair in self.cache:
+                touch_last_seen(db, chip_id, node)
+                return
+
             existing = get_device_by_pair(db, chip_id, node)
             if existing is not None:
+                touch_last_seen(db, chip_id, node)
                 self.cache.add(pair)
                 return
 
@@ -164,7 +170,8 @@ class MessageHandler(Handler):
         parameters: dict,
         session_factory: "SessionLocal",
     ) -> None:
-        """Get or create device, then upsert event data."""
+        """Get or create device, upsert event data, mark device updated."""
+        from app.crud.device import touch_last_updated
         from app.crud.device_event import get_or_create_device, upsert_event
         from sqlalchemy.exc import IntegrityError
 
@@ -172,6 +179,7 @@ class MessageHandler(Handler):
         try:
             device = get_or_create_device(db, chip_id, node)
             upsert_event(db, device.id, event_type, parameters)
+            touch_last_updated(db, device.id)
             logger.info(
                 "Upserted event %s for device %s", event_type, device.id
             )

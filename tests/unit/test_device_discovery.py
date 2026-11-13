@@ -1,6 +1,7 @@
 """Unit tests for MessageHandler — parsing, validation, cache logic."""
 
 import tempfile
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -114,13 +115,32 @@ def db_env():
 class TestProcess:
     """Test _process with a real SQLite database."""
 
-    def test_cache_hit_skips_db(self, db_env):
+    def test_cache_hit_unknown_pair_is_noop(self, db_env):
         eng, Session = db_env
         h = MessageHandler()
         h.cache.add(("ABC123", "sensor-1"))
         h._process("ABC123", "sensor-1", Session)
         db = Session()
         assert get_device_by_pair(db, "ABC123", "sensor-1") is None
+        db.close()
+
+    def test_cache_hit_updates_last_seen_at(self, db_env):
+        eng, Session = db_env
+        # Seed the device with a stale last_seen_at.
+        db = Session()
+        dev = create_device(db, DeviceCreate(chip_id="ABC123", node="sensor-1"))
+        dev.last_seen_at = datetime(2020, 1, 1)
+        db.commit()
+        db.close()
+
+        h = MessageHandler()
+        h.cache.add(("ABC123", "sensor-1"))
+        h._process("ABC123", "sensor-1", Session)
+
+        db = Session()
+        found = get_device_by_pair(db, "ABC123", "sensor-1")
+        assert found is not None
+        assert found.last_seen_at.year >= 2026
         db.close()
 
     def test_cache_miss_db_miss_inserts(self, db_env):
@@ -134,13 +154,15 @@ class TestProcess:
         assert dev is not None
         assert dev.chip_id == "ABC123"
         assert dev.node == "sensor-1"
+        assert dev.last_seen_at is not None
         db.close()
 
     def test_cache_miss_db_hit_warms_cache(self, db_env):
         eng, Session = db_env
-        # Seed the DB manually.
+        # Seed the DB manually with a stale last_seen_at.
         db = Session()
-        create_device(db, DeviceCreate(chip_id="ABC123", node="sensor-1"))
+        dev = create_device(db, DeviceCreate(chip_id="ABC123", node="sensor-1"))
+        dev.last_seen_at = datetime(2020, 1, 1)
         db.commit()
         db.close()
 
@@ -153,6 +175,8 @@ class TestProcess:
             Device.chip_id == "ABC123", Device.node == "sensor-1"
         ).count()
         assert count == 1
+        found = get_device_by_pair(db, "ABC123", "sensor-1")
+        assert found.last_seen_at.year >= 2026
         db.close()
 
     def test_integrity_error_no_crash(self, db_env):
@@ -173,6 +197,50 @@ class TestProcess:
 
         # No crash. Cache populated.
         assert ("ABC123", "sensor-1") in h2.cache
+
+
+# -- _process_event() — marks device last_updated (real SQLite) -------------
+
+
+class TestProcessEvent:
+    """Test _process_event with a real SQLite database."""
+
+    def test_event_creates_device_and_marks_updated(self, db_env):
+        eng, Session = db_env
+        h = MessageHandler()
+        h._process_event(
+            "ABC123", "sensor-1", "system.pong", {"heap_free": 1}, Session
+        )
+
+        db = Session()
+        dev = get_device_by_pair(db, "ABC123", "sensor-1")
+        assert dev is not None
+        assert dev.last_seen_at is not None
+        assert dev.last_updated_at is not None
+        db.close()
+
+    def test_repeated_event_refreshes_last_updated_at(self, db_env):
+        eng, Session = db_env
+        h = MessageHandler()
+        h._process_event(
+            "ABC123", "sensor-1", "system.pong", {"heap_free": 1}, Session
+        )
+
+        # Seed a stale last_updated_at.
+        db = Session()
+        dev = get_device_by_pair(db, "ABC123", "sensor-1")
+        dev.last_updated_at = datetime(2020, 1, 1)
+        db.commit()
+        db.close()
+
+        h._process_event(
+            "ABC123", "sensor-1", "system.pong", {"heap_free": 2}, Session
+        )
+
+        db = Session()
+        found = get_device_by_pair(db, "ABC123", "sensor-1")
+        assert found.last_updated_at.year >= 2026
+        db.close()
 
 
 # -- start() / stop() --------------------------------------------------------

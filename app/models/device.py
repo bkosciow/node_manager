@@ -24,6 +24,12 @@ class Device(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow
     )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow
+    )
+    last_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
 
     events: Mapped[list["DeviceEvent"]] = relationship(
         "DeviceEvent", back_populates="device", cascade="all, delete-orphan"

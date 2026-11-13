@@ -31,7 +31,7 @@ from sqlalchemy import create_engine, inspect, select, text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.db.base import Base  # noqa: E402
+from app.db.migrate import run_migrations  # noqa: E402
 from app.models.node_update_file import NodeUpdateFile  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ def main() -> None:
         sys.exit(1)
 
     engine = create_engine(settings.database_url)
-    Base.metadata.create_all(bind=engine)
+    run_migrations()
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     db = SessionLocal()
